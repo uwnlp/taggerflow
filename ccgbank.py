@@ -1,14 +1,15 @@
 import os
 import re
+import urllib
+import tarfile
 
 from pyparsing import nums, printables
 from pyparsing import Word, Forward, Group, OneOrMore, Literal
 
 class CCGBankReader(object):
-
-    TRAIN_REGEX = re.compile(r"wsj_((0[2-9])|(1[0-9])|(2[0-1])).*auto")
-    DEV_REGEX = re.compile(r"wsj_00.*auto")
-    TEST_REGEX = re.compile(r"wsj_23.*auto")
+    TRAIN_REGEX = re.compile(r".*wsj_((0[2-9])|(1[0-9])|(2[0-1])).*auto")
+    DEV_REGEX = re.compile(r".*wsj_00.*auto")
+    TEST_REGEX = re.compile(r".*wsj_23.*auto")
 
     def __init__(self, supertags_only=True):
         self.ccgparse = Forward()
@@ -34,24 +35,39 @@ class CCGBankReader(object):
             # Only extract the tokens and supertags.
             leaf.setParseAction(lambda s,l,t:(t[0][3], t[0][0]))
 
-    def get_sentences(self, filename):
-        with open(filename) as f:
-            for line in f.readlines():
-                if line.startswith("("):
-                    yield zip(*self.ccgparse.parseString(line).asList())
+    def get_sentences(self, tar, member):
+        for line in tar.extractfile(member).readlines():
+            if line.startswith("("):
+                yield zip(*self.ccgparse.parseString(line).asList())
 
-    def get_splits(self, data_dir):
+    def get_splits(self):
+        filepath = self.maybe_download("data",
+                                       "http://rp-www.cs.usyd.edu.au/~mhonn/rebanking_dist/",
+                                       "ccgbank_acl10.tar.gz")
+        print("Extracting data from {}...".format(filepath))
         train = []
         dev = []
         test = []
-        for dirpath, dnames, fnames in os.walk(data_dir):
-            print("Reading from {}".format(dirpath))
-            for f in fnames:
-                p = os.path.join(dirpath, f)
-                if self.TRAIN_REGEX.match(f):
-                    train.extend(self.get_sentences(p))
-                elif self.DEV_REGEX.match(f):
-                    dev.extend(self.get_sentences(p))
-                elif self.TEST_REGEX.match(f):
-                    test.extend(self.get_sentences(p))
+        with tarfile.open(filepath, "r:gz") as tar:
+            for member in tar:
+                if self.TRAIN_REGEX.match(member.name):
+                    train.extend(self.get_sentences(tar, member))
+                elif self.DEV_REGEX.match(member.name):
+                    dev.extend(self.get_sentences(tar, member))
+                elif self.TEST_REGEX.match(member.name):
+                    test.extend(self.get_sentences(tar, member))
         return (train, dev, test)
+
+    def maybe_download(self, data_dir, source_url, filename):
+        if not os.path.exists(data_dir):
+            os.mkdir(data_dir)
+        filepath = os.path.join(data_dir, filename)
+        if os.path.exists(filepath):
+            print("Using cached version of {}.".format(filepath))
+        else:
+            file_url = source_url + filename
+            print("Downloading {}...".format(file_url))
+            filepath, _ = urllib.urlretrieve(file_url, filepath)
+            statinfo = os.stat(filepath)
+            print("Succesfully downloaded {} ({} bytes).".format(file_url, statinfo.st_size))
+        return filepath

@@ -136,8 +136,7 @@ def encode_data(sentences, itoken_space, isupertag_space):
     return [([itoken_space[t] for t in tokens], [isupertag_space[s] for s in supertags]) for tokens, supertags in sentences]
 
 if __name__ == "__main__":
-    reader = ccgbank.CCGBankReader()
-    train_sentences, dev_sentences, test_sentences = reader.get_splits(sys.argv[1])
+    train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits()
     print("Train: {} | Dev: {} | Test: {}".format(len(train_sentences), len(dev_sentences), len(test_sentences)))
 
     token_space, supertag_space = get_io_spaces(train_sentences)
