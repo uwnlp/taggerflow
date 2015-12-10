@@ -9,9 +9,9 @@ from collections import defaultdict
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.models.rnn import rnn
-from tensorflow.models.rnn import rnn_cell
-from tensorflow.models.rnn import seq2seq
+from tensorflow.python.ops import rnn
+from tensorflow.python.ops import rnn_cell
+from tensorflow.python.ops import seq2seq
 
 import ccgbank
 
@@ -28,23 +28,25 @@ class SuperTaggerModel(object):
 
         self.x = tf.placeholder(tf.int32, [batch_size, max_tokens])
         self.y = tf.placeholder(tf.int32, [batch_size, max_tokens])
-        self.num_tokens = tf.placeholder(tf.int32, [batch_size])
+        self.num_tokens = tf.placeholder(tf.int64, [batch_size])
 
         lstm_cell = rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0)
         cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
 
-        initial_state = cell.zero_state(batch_size, tf.float32)
+        initial_state_fw = cell.zero_state(batch_size, tf.float32)
+        initial_state_bw = cell.zero_state(batch_size, tf.float32)
 
         embedding = tf.get_variable("embedding", [vocab_size, hidden_size])
         inputs = tf.split(1, max_tokens, tf.nn.embedding_lookup(embedding, self.x))
         inputs = [tf.squeeze(i, [1]) for i in inputs]
 
-        outputs, states = rnn.rnn(cell, inputs,
-                                  initial_state=initial_state,
-                                  sequence_length=self.num_tokens)
+        outputs = rnn.bidirectional_rnn(cell, cell, inputs,
+                                        initial_state_fw=initial_state_fw,
+                                        initial_state_bw=initial_state_bw,
+                                        sequence_length=self.num_tokens)
 
-        output = tf.reshape(tf.concat(1, outputs), [-1, hidden_size])
-        softmax_w = tf.get_variable("softmax_w", [hidden_size, supertags_size])
+        output = tf.reshape(tf.concat(1, outputs), [-1, 2 * hidden_size])
+        softmax_w = tf.get_variable("softmax_w", [2 * hidden_size, supertags_size])
         softmax_b = tf.get_variable("softmax_b", [supertags_size])
         logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b)
 
@@ -66,7 +68,7 @@ class SuperTaggerModel(object):
         for i in range(len(data)/batch_size):
             batch_x = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
             batch_y = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
-            batch_num_tokens = np.zeros([batch_size], dtype=np.int)
+            batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
             for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
                 if len(x) > self.config.max_tokens:
                     continue
@@ -99,6 +101,9 @@ class SuperTaggerModel(object):
             tf.initialize_all_variables().run()
             for epoch in range(self.config.num_epochs):
                 print("========= Epoch {:02d} =========".format(epoch))
+                num_correct, num_total = self.evaluate(dev_batches, session)
+                print("Validation accuracy: {:.3f}% ({}/{})".format((100.0 * num_correct)/num_total, num_correct, num_total))
+
                 print("Training mini-batches: {}".format(len(train_batches)))
                 train_loss = 0.0
                 for x,y,num_tokens in train_batches:
@@ -109,9 +114,6 @@ class SuperTaggerModel(object):
                     })
                     train_loss += loss
                 print("Epoch training loss: {:.3f}".format(train_loss/len(train_batches)))
-
-                num_correct, num_total = self.evaluate(dev_batches, session)
-                print("Validation accuracy: {:.3f}% ({}/{})".format((100.0 * num_correct)/num_total, num_correct, num_total))
                 print("============================")
 
 class SuperTaggerConfig(object):
@@ -144,9 +146,10 @@ def encode_data(sentences, itoken_space, isupertag_space):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="configuration json file")
+    parser.add_argument("-d", "--debug", help="uses a smaller training set for debugging", action="store_true")
     args = parser.parse_args()
 
-    train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits()
+    train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits(args.debug)
     print("Train: {} | Dev: {} | Test: {}".format(len(train_sentences), len(dev_sentences), len(test_sentences)))
 
     token_space, supertag_space = get_io_spaces(train_sentences)

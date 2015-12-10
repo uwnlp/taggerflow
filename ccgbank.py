@@ -11,6 +11,9 @@ class CCGBankReader(object):
     DEV_REGEX = re.compile(r".*wsj_00.*auto")
     TEST_REGEX = re.compile(r".*wsj_23.*auto")
 
+    # For debugging purposes only.
+    SMALL_TRAIN_REGEX = re.compile(r".*wsj_01.*auto")
+
     def __init__(self, supertags_only=True):
         self.ccgparse = Forward()
         supertag = Word(printables, excludeChars="<>")
@@ -40,7 +43,7 @@ class CCGBankReader(object):
             if line.startswith("("):
                 yield zip(*self.ccgparse.parseString(line).asList())
 
-    def get_splits(self):
+    def get_splits(self, debug=False):
         filepath = self.maybe_download("data",
                                        "http://rp-www.cs.usyd.edu.au/~mhonn/rebanking_dist/",
                                        "ccgbank_acl10.tar.gz")
@@ -48,9 +51,10 @@ class CCGBankReader(object):
         train = []
         dev = []
         test = []
+        train_regex = self.SMALL_TRAIN_REGEX if debug else self.TRAIN_REGEX
         with tarfile.open(filepath, "r:gz") as tar:
             for member in tar:
-                if self.TRAIN_REGEX.match(member.name):
+                if train_regex.match(member.name):
                     train.extend(self.get_sentences(tar, member))
                 elif self.DEV_REGEX.match(member.name):
                     dev.extend(self.get_sentences(tar, member))
