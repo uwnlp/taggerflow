@@ -4,6 +4,8 @@ LSTM supertagger implemented in TensorFlow.
 
 ## Dependencies
 * CCGBank
+* pyparsing
+* numpy
 * TensorFlow
 
 ## Run Experiment
