@@ -2,6 +2,7 @@
 
 import sys
 import json
+import math
 import argparse
 
 from collections import defaultdict
@@ -65,7 +66,8 @@ class SuperTaggerModel(object):
     def get_batches(self, data):
         batch_size = self.config.batch_size
         batches = []
-        for i in range(len(data)/batch_size):
+        num_batches = int(math.ceil(len(data)/batch_size))
+        for i in range(num_batches):
             batch_x = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
             batch_y = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
             batch_num_tokens = np.zeros([batch_size], dtype=np.int64)

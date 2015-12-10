@@ -45,8 +45,8 @@ class CCGBankReader(object):
 
     def get_splits(self, debug=False):
         filepath = self.maybe_download("data",
-                                       "http://rp-www.cs.usyd.edu.au/~mhonn/rebanking_dist/",
-                                       "ccgbank_acl10.tar.gz")
+                                       "http://appositive.cs.washington.edu/resources/",
+                                       "LDC2005T13.tgz")
         print("Extracting data from {}...".format(filepath))
         train = []
         dev = []

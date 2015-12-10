@@ -1,9 +1,9 @@
 {
-    "hidden_size": 400,
+    "hidden_size": 128,
     "num_layers": 2,
     "max_grad_norm": 5,
-    "num_epochs": 10,
+    "num_epochs": 50,
     "learning_rate": 0.1,
     "max_tokens": 100,
-    "batch_size": 100
+    "batch_size": 10
 }
