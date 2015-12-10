@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 import sys
+import json
+import argparse
+
 from collections import defaultdict
 
 import numpy as np
@@ -113,16 +116,19 @@ class SuperTaggerModel(object):
 
 class SuperTaggerConfig(object):
 
-    def __init__(self, vocab_size, supertags_size):
+    def __init__(self, vocab_size, supertags_size, config_file):
         self.vocab_size = vocab_size
         self.supertags_size = supertags_size
-        self.hidden_size = 100
-        self.num_layers = 2
-        self.max_grad_norm = 5
-        self.num_epochs = 10
-        self.learning_rate = 0.1
-        self.max_tokens = 50
-        self.batch_size = 5
+
+        with open(config_file) as f:
+            config = json.load(f)
+            self.hidden_size = config["hidden_size"]
+            self.num_layers = config["num_layers"]
+            self.max_grad_norm = config["max_grad_norm"]
+            self.num_epochs = config["num_epochs"]
+            self.learning_rate = config["learning_rate"]
+            self.max_tokens = config["max_tokens"]
+            self.batch_size = config["batch_size"]
 
 def get_io_spaces(sentences):
     token_space = set()
@@ -136,6 +142,10 @@ def encode_data(sentences, itoken_space, isupertag_space):
     return [([itoken_space[t] for t in tokens], [isupertag_space[s] for s in supertags]) for tokens, supertags in sentences]
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", help="configuration json file")
+    args = parser.parse_args()
+
     train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits()
     print("Train: {} | Dev: {} | Test: {}".format(len(train_sentences), len(dev_sentences), len(test_sentences)))
 
@@ -153,6 +163,6 @@ if __name__ == "__main__":
     train_data = encode_data(train_sentences, itoken_space, isupertag_space)
     dev_data = encode_data(dev_sentences, itoken_space, isupertag_space)
 
-    config = SuperTaggerConfig(len(token_space), len(supertag_space))
+    config = SuperTaggerConfig(len(token_space), len(supertag_space), args.config)
     model = SuperTaggerModel(config)
     model.train(train_data, dev_data)
