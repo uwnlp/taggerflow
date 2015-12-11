@@ -33,9 +33,11 @@ class SuperTaggerModel(object):
         self.x = tf.placeholder(tf.int32, [batch_size, max_tokens, len(embedding_spaces)])
         self.y = tf.placeholder(tf.int32, [batch_size, max_tokens])
         self.num_tokens = tf.placeholder(tf.int64, [batch_size])
+        self.keep_probability = tf.constant(config.keep_probability)
 
         # LSTM cell is replicated across stacks and timesteps.
         lstm_cell = rnn_cell.BasicLSTMCell(lstm_hidden_size, forget_bias=1.0)
+        lstm_cell = rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=self.keep_probability)
         cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
 
         # Both LSTMs have their own initial state.
@@ -64,6 +66,7 @@ class SuperTaggerModel(object):
 
         # From LSTM outputs to softmax.
         relu = tf.nn.relu(self.linear_layer("relu", outputs, 2 * relu_hidden_size))
+        relu = tf.nn.dropout(relu, self.keep_probability)
         softmax = self.linear_layer("softmax", relu, supertags_size)
 
         # Predictions are the indexes with the highest value from the softmax layer.
@@ -122,7 +125,8 @@ class SuperTaggerModel(object):
         for x,y,num_tokens in batches:
             predictions = session.run(self.predictions, {
                 self.x: x,
-                self.num_tokens: num_tokens
+                self.num_tokens: num_tokens,
+                self.keep_probability: 1.0
             })
             for i,n in enumerate(num_tokens):
                 num_total += n
@@ -172,6 +176,7 @@ class SuperTaggerConfig(object):
             self.learning_rate = config["learning_rate"]
             self.max_tokens = config["max_tokens"]
             self.batch_size = config["batch_size"]
+            self.keep_probability = config["keep_probability"]
             for name,size in config["embedding_sizes"].items():
                 self.embedding_spaces[name].embedding_size = size
 

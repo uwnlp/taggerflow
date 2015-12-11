@@ -7,6 +7,7 @@
     "learning_rate": 0.1,
     "max_tokens": 100,
     "batch_size": 10,
+    "keep_probability": 0.5,
     "embedding_sizes": {
         "words"    : 64,
         "prefix_1" : 32,
