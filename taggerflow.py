@@ -15,6 +15,24 @@ from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import seq2seq
 
 import ccgbank
+import logging
+
+logger = None
+
+def initialize_logger(log_file):
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    # create console handler and set level to info
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    logger.addHandler(handler)
+
+    # create file handler and set level to log
+    handler = logging.FileHandler(log_file)
+    handler.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    return logger
 
 class SuperTaggerModel(object):
 
@@ -111,7 +129,7 @@ class SuperTaggerModel(object):
             batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
             for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
                 if len(x) > self.config.max_tokens:
-                    print("Skipping sentence of length {}.".format(len(x)))
+                    logger.info("Skipping sentence of length {}.".format(len(x)))
                     continue
                 batch_num_tokens[j] = len(x)
                 batch_x[j,:len(x):] = x
@@ -134,19 +152,19 @@ class SuperTaggerModel(object):
         return (num_correct, num_total)
 
     def train(self, train_data, dev_data):
-        print("Massaging data into mini-batch format...")
+        logger.info("Massaging data into mini-batch format...")
         train_batches = self.get_batches(train_data)
         dev_batches = self.get_batches(dev_data)
-        print("Train batches: {}".format(len(train_batches)))
-        print("Dev batches: {}".format(len(dev_batches)))
+        logger.info("Train batches: {}".format(len(train_batches)))
+        logger.info("Dev batches: {}".format(len(dev_batches)))
 
-        print("Starting training for {} epochs.".format(self.config.num_epochs))
+        logger.info("Starting training for {} epochs.".format(self.config.num_epochs))
         with tf.Session() as session:
             tf.initialize_all_variables().run()
             for epoch in range(self.config.num_epochs):
-                print("========= Epoch {:02d} =========".format(epoch))
+                logger.info("========= Epoch {:02d} =========".format(epoch))
                 num_correct, num_total = self.evaluate(dev_batches, session)
-                print("Validation accuracy: {:.3f}% ({}/{})".format((100.0 * num_correct)/num_total, num_correct, num_total))
+                logger.info("Validation accuracy: {:.3f}% ({}/{})".format((100.0 * num_correct)/num_total, num_correct, num_total))
                 train_loss = 0.0
                 for i,(x,y,num_tokens) in enumerate(train_batches):
                     _, loss = session.run([self.optimize, self.loss], {
@@ -156,9 +174,9 @@ class SuperTaggerModel(object):
                     })
                     train_loss += loss
                     if i % 100 == 0:
-                        print("{}/{} mean training loss: {:.3f}".format(i+1, len(train_batches), train_loss/(i+1)))
-                print("Epoch mean training loss: {:.3f}".format(train_loss/len(train_batches)))
-                print("============================")
+                        logger.info("{}/{} mean training loss: {:.3f}".format(i+1, len(train_batches), train_loss/(i+1)))
+                logger.info("Epoch mean training loss: {:.3f}".format(train_loss/len(train_batches)))
+                logger.info("============================")
 
 class SuperTaggerConfig(object):
 
@@ -254,8 +272,10 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--debug", help="uses a smaller training set for debugging", action="store_true")
     args = parser.parse_args()
 
+    logger = initialize_logger("info.log")
+
     train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits(args.debug)
-    print("Train: {} | Dev: {} | Test: {}".format(len(train_sentences), len(dev_sentences), len(test_sentences)))
+    logger.info("Train: {} | Dev: {} | Test: {}".format(len(train_sentences), len(dev_sentences), len(test_sentences)))
 
     supertag_space = SupertagSpace(train_sentences)
     embedding_spaces = OrderedDict([("words",   WordSpace(train_sentences)),
@@ -268,9 +288,9 @@ if __name__ == "__main__":
                                     ("suffix_3", SuffixSpace(train_sentences, 3)),
                                     ("suffix_4", SuffixSpace(train_sentences, 4))])
 
-    print("Number of supertags: {}".format(supertag_space.size()))
+    logger.info("Number of supertags: {}".format(supertag_space.size()))
     for name, space in embedding_spaces.items():
-        print("Number of {}: {}".format(name, space.size()))
+        logger.info("Number of {}: {}".format(name, space.size()))
 
     config = SuperTaggerConfig(supertag_space, embedding_spaces, args.config)
     model = SuperTaggerModel(config)
