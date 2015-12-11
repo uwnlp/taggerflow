@@ -1,9 +1,21 @@
 {
-    "hidden_size": 128,
+    "lstm_hidden_size": 128,
+    "relu_hidden_size": 128,
     "num_layers": 2,
     "max_grad_norm": 5,
     "num_epochs": 50,
     "learning_rate": 0.1,
     "max_tokens": 100,
-    "batch_size": 10
+    "batch_size": 10,
+    "embedding_sizes": {
+        "words"    : 64,
+        "prefix_1" : 32,
+        "prefix_2" : 32,
+        "prefix_3" : 32,
+        "prefix_4" : 32,
+        "suffix_1" : 32,
+        "suffix_2" : 32,
+        "suffix_3" : 32,
+        "suffix_4" : 32
+    }
 }

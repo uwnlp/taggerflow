@@ -12,7 +12,9 @@ class CCGBankReader(object):
     TEST_REGEX = re.compile(r".*wsj_23.*auto")
 
     # For debugging purposes only.
-    SMALL_TRAIN_REGEX = re.compile(r".*wsj_01.*auto")
+    DEBUG_TRAIN_REGEX = re.compile(r".*wsj_0101.*auto")
+    DEBUG_DEV_REGEX = re.compile(r".*wsj_0001.*auto")
+    DEBUG_TEST_REGEX = re.compile(r".*wsj_2301.*auto")
 
     def __init__(self, supertags_only=True):
         self.ccgparse = Forward()
@@ -51,14 +53,16 @@ class CCGBankReader(object):
         train = []
         dev = []
         test = []
-        train_regex = self.SMALL_TRAIN_REGEX if debug else self.TRAIN_REGEX
+        train_regex = self.DEBUG_TRAIN_REGEX if debug else self.TRAIN_REGEX
+        dev_regex = self.DEBUG_DEV_REGEX if debug else self.DEV_REGEX
+        test_regex = self.DEBUG_TEST_REGEX if debug else self.TEST_REGEX
         with tarfile.open(filepath, "r:gz") as tar:
             for member in tar:
                 if train_regex.match(member.name):
                     train.extend(self.get_sentences(tar, member))
-                elif self.DEV_REGEX.match(member.name):
+                elif dev_regex.match(member.name):
                     dev.extend(self.get_sentences(tar, member))
-                elif self.TEST_REGEX.match(member.name):
+                elif test_regex.match(member.name):
                     test.extend(self.get_sentences(tar, member))
         return (train, dev, test)
 
