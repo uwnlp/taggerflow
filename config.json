@@ -1,6 +1,6 @@
 {
     "lstm_hidden_size": 128,
-    "relu_hidden_size": 128,
+    "relu_hidden_size": 64,
     "num_layers": 2,
     "max_grad_norm": 5,
     "num_epochs": 50,

@@ -3,10 +3,8 @@
 LSTM supertagger implemented in TensorFlow.
 
 ## Dependencies
-* CCGBank
 * pyparsing
-* numpy
-* TensorFlow
+* tensorflow
 
 ## Run Experiment
-`python taggerflow.py <ccgbank_dir>`
+`python taggerflow.py <config_file>`

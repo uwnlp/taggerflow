@@ -6,6 +6,8 @@ import tarfile
 from pyparsing import nums, printables
 from pyparsing import Word, Forward, Group, OneOrMore, Literal
 
+import util
+
 class CCGBankReader(object):
     TRAIN_REGEX = re.compile(r".*wsj_((0[2-9])|(1[0-9])|(2[0-1])).*auto")
     DEV_REGEX = re.compile(r".*wsj_00.*auto")
@@ -46,7 +48,7 @@ class CCGBankReader(object):
                 yield zip(*self.ccgparse.parseString(line).asList())
 
     def get_splits(self, debug=False):
-        filepath = self.maybe_download("data",
+        filepath = util.maybe_download("data",
                                        "http://appositive.cs.washington.edu/resources/",
                                        "LDC2005T13.tgz")
         print("Extracting data from {}...".format(filepath))
@@ -65,17 +67,3 @@ class CCGBankReader(object):
                 elif test_regex.match(member.name):
                     test.extend(self.get_sentences(tar, member))
         return (train, dev, test)
-
-    def maybe_download(self, data_dir, source_url, filename):
-        if not os.path.exists(data_dir):
-            os.mkdir(data_dir)
-        filepath = os.path.join(data_dir, filename)
-        if os.path.exists(filepath):
-            print("Using cached version of {}.".format(filepath))
-        else:
-            file_url = source_url + filename
-            print("Downloading {}...".format(file_url))
-            filepath, _ = urllib.urlretrieve(file_url, filepath)
-            statinfo = os.stat(filepath)
-            print("Succesfully downloaded {} ({} bytes).".format(file_url, statinfo.st_size))
-        return filepath

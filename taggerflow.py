@@ -7,6 +7,8 @@ import argparse
 
 from collections import defaultdict
 from collections import OrderedDict
+from collections import Counter
+
 import numpy as np
 import tensorflow as tf
 
@@ -14,8 +16,10 @@ from tensorflow.python.ops import rnn
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import seq2seq
 
-import ccgbank
 import logging
+
+import ccgbank
+import util
 
 logger = None
 
@@ -199,8 +203,9 @@ class SuperTaggerConfig(object):
                 self.embedding_spaces[name].embedding_size = size
 
 class FeatureSpace(object):
-    def __init__(self, sentences):
-        self.space = list(set(self.extract(sentences)))
+    def __init__(self, sentences, min_count=None):
+        counts = Counter(self.extract(sentences))
+        self.space = [f for f in counts if min_count is None or counts[f] >= min_count]
 
         # Append extra index for unknown features.
         num_known_features = len(self.space)
@@ -220,8 +225,8 @@ class FeatureSpace(object):
         raise NotImplementedError("Subclasses must implement this!")
 
 class SupertagSpace(FeatureSpace):
-    def __init__(self, sentences):
-        super(SupertagSpace, self).__init__(sentences)
+    def __init__(self, sentences, min_count=None):
+        super(SupertagSpace, self).__init__(sentences, min_count)
 
     def extract(self, sentences):
         for tokens, supertags in sentences:
@@ -229,8 +234,8 @@ class SupertagSpace(FeatureSpace):
                 yield s
 
 class EmbeddingSpace(FeatureSpace):
-    def __init__(self, sentences):
-        super(EmbeddingSpace, self).__init__(sentences)
+    def __init__(self, sentences, min_count=None):
+        super(EmbeddingSpace, self).__init__(sentences, min_count)
 
         # To be set by the configuration.
         self.embedding_size = None
@@ -243,25 +248,53 @@ class EmbeddingSpace(FeatureSpace):
     def extract_from_token(self, token):
         raise NotImplementedError("Subclasses must implement this!")
 
-class WordSpace(EmbeddingSpace):
-    def __init__(self, sentences):
-        super(WordSpace, self).__init__(sentences)
+class PretrainedEmbeddingSpace(EmbeddingSpace):
+    def __init__(self, embeddings_file):
+        already_added = set()
+        self.embedding_size = None
+        self.space = []
+        self.embeddings = []
+        with open(embeddings_file) as f:
+            for i,line in enumerate(f.readlines()):
+                splits = line.split()
+                word = splits[0].lower()
+
+                if i == 0 and word != "*unknown*":
+                    raise ValueError("First embedding in the file should represent the unknown word.")
+                if word not in already_added:
+                    embedding = [float(s) for s in splits[1:]]
+
+                    if self.embedding_size is None:
+                        self.embedding_size = len(embedding)
+                    elif self.embedding_size != len(embedding):
+                        raise ValueError("Dimensions mismatch. Expected {} but was {}.".format(self.embedding_size, len(embedding)))
+
+                    already_added.add(word)
+                    self.space.append(word)
+                    self.embeddings.append(embedding)
+
+        self.space = list(self.space)
+        self.ispace = defaultdict(lambda:0, {f:i for i,f in enumerate(self.space)})
+
+class WordSpace(PretrainedEmbeddingSpace):
+    def __init__(self, embeddings_file):
+        super(WordSpace, self).__init__(embeddings_file)
 
     def extract_from_token(self, token):
-        return token
+        return token.lower()
 
 class PrefixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n):
+    def __init__(self, sentences, n, min_count=None):
         self.n = n
-        super(PrefixSpace, self).__init__(sentences)
+        super(PrefixSpace, self).__init__(sentences, min_count)
 
     def extract_from_token(self, token):
         return token[:self.n]
 
 class SuffixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n):
+    def __init__(self, sentences, n, min_count=None):
         self.n = n
-        super(SuffixSpace, self).__init__(sentences)
+        super(SuffixSpace, self).__init__(sentences, min_count)
 
     def extract_from_token(self, token):
         return token[-self.n:]
@@ -277,16 +310,19 @@ if __name__ == "__main__":
     train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits(args.debug)
     logger.info("Train: {} | Dev: {} | Test: {}".format(len(train_sentences), len(dev_sentences), len(test_sentences)))
 
+
     supertag_space = SupertagSpace(train_sentences)
-    embedding_spaces = OrderedDict([("words",   WordSpace(train_sentences)),
-                                    ("prefix_1", PrefixSpace(train_sentences, 1)),
-                                    ("prefix_2", PrefixSpace(train_sentences, 2)),
-                                    ("prefix_3", PrefixSpace(train_sentences, 3)),
-                                    ("prefix_4", PrefixSpace(train_sentences, 4)),
-                                    ("suffix_1", SuffixSpace(train_sentences, 1)),
-                                    ("suffix_2", SuffixSpace(train_sentences, 2)),
-                                    ("suffix_3", SuffixSpace(train_sentences, 3)),
-                                    ("suffix_4", SuffixSpace(train_sentences, 4))])
+    embedding_spaces = OrderedDict([("words",    WordSpace(util.maybe_download("data",
+                                                                               "http://appositive.cs.washington.edu/resources/",
+                                                                               "embeddings.raw"))),
+                                    ("prefix_1", PrefixSpace(train_sentences, 1, min_count=3)),
+                                    ("prefix_2", PrefixSpace(train_sentences, 2, min_count=3)),
+                                    ("prefix_3", PrefixSpace(train_sentences, 3, min_count=3)),
+                                    ("prefix_4", PrefixSpace(train_sentences, 4, min_count=3)),
+                                    ("suffix_1", SuffixSpace(train_sentences, 1, min_count=3)),
+                                    ("suffix_2", SuffixSpace(train_sentences, 2, min_count=3)),
+                                    ("suffix_3", SuffixSpace(train_sentences, 3, min_count=3)),
+                                    ("suffix_4", SuffixSpace(train_sentences, 4, min_count=3))])
 
     logger.info("Number of supertags: {}".format(supertag_space.size()))
     for name, space in embedding_spaces.items():
