@@ -67,8 +67,8 @@ class SuperTaggerModel(object):
         initial_state_bw = cell.zero_state(batch_size, tf.float32)
 
         # From feature indexes to concatenated embeddings.
-        embedding_tables = [tf.get_variable("{}_embedding".format(name), [space.size(), space.embedding_size]) for name, space in embedding_spaces.items()]
-        embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embedding_tables, tf.split(2, len(embedding_spaces), self.x))]
+        self.embeddings_w = OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items() )
+        embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(self.embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
         concat_embedding = tf.concat(2, embeddings)
 
         # From concatenated embeddings to LSTM inputs.
@@ -163,8 +163,15 @@ class SuperTaggerModel(object):
         logger.info("Dev batches: {}".format(len(dev_batches)))
 
         logger.info("Starting training for {} epochs.".format(self.config.num_epochs))
+
         with tf.Session() as session:
             tf.initialize_all_variables().run()
+
+            for name, space in self.config.embedding_spaces.items():
+                if isinstance(space, PretrainedEmbeddingSpace):
+                    logger.info("Loading pre-trained embeddings for {}.".format(name))
+                    session.run(tf.assign(self.embeddings_w[name], space.embeddings))
+
             for epoch in range(self.config.num_epochs):
                 logger.info("========= Epoch {:02d} =========".format(epoch))
                 num_correct, num_total = self.evaluate(dev_batches, session)
@@ -200,7 +207,8 @@ class SuperTaggerConfig(object):
             self.batch_size = config["batch_size"]
             self.keep_probability = config["keep_probability"]
             for name,size in config["embedding_sizes"].items():
-                self.embedding_spaces[name].embedding_size = size
+                if self.embedding_spaces[name].embedding_size is None:
+                    self.embedding_spaces[name].embedding_size = size
 
 class FeatureSpace(object):
     def __init__(self, sentences, min_count=None):
