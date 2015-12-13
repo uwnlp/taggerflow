@@ -1,4 +1,5 @@
 import os
+import time
 import urllib
 
 def maybe_download(data_dir, source_url, filename):
@@ -14,3 +15,19 @@ def maybe_download(data_dir, source_url, filename):
         statinfo = os.stat(filepath)
         print("Succesfully downloaded {} ({} bytes).".format(file_url, statinfo.st_size))
     return filepath
+
+class Timer:
+    def __init__(self, logger, name, active=True):
+        self.logger = logger
+        self.name = name if active else None
+
+    def __enter__(self):
+        self.start = time.clock()
+        return self
+
+    def __exit__(self, *args):
+        if self.name is not None:
+            self.tick(self.name)
+
+    def tick(self, message):
+        self.logger.info("{} took {:.3f} seconds.".format(message, time.clock() - self.start))

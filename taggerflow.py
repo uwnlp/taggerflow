@@ -164,13 +164,13 @@ class SuperTaggerModel(object):
 
         logger.info("Starting training for {} epochs.".format(self.config.num_epochs))
 
-        with tf.Session() as session:
+        with tf.Session() as session, util.Timer(logger, "Training") as timer:
             tf.initialize_all_variables().run()
 
             for name, space in self.config.embedding_spaces.items():
                 if isinstance(space, PretrainedEmbeddingSpace):
-                    logger.info("Loading pre-trained embeddings for {}.".format(name))
-                    session.run(tf.assign(self.embeddings_w[name], space.embeddings))
+                    with util.Timer(logger, "Loading pre-trained embeddings for {}".format(name)):
+                        session.run(tf.assign(self.embeddings_w[name], space.embeddings))
 
             for epoch in range(self.config.num_epochs):
                 logger.info("========= Epoch {:02d} =========".format(epoch))
@@ -187,6 +187,7 @@ class SuperTaggerModel(object):
                     if i % 100 == 0:
                         logger.info("{}/{} mean training loss: {:.3f}".format(i+1, len(train_batches), train_loss/(i+1)))
                 logger.info("Epoch mean training loss: {:.3f}".format(train_loss/len(train_batches)))
+                timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
                 logger.info("============================")
 
 class SuperTaggerConfig(object):
