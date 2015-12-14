@@ -86,11 +86,9 @@ class SuperTaggerModel(object):
         outputs = tf.reshape(outputs, [batch_size, max_tokens, -1])
 
         # From LSTM outputs to softmax.
-        relu0 = tf.nn.relu(self.linear_layer("relu0", outputs, config.relu0_hidden_size))
-        relu0 = tf.nn.dropout(relu0, self.keep_probability)
-        relu1 = tf.nn.relu(self.linear_layer("relu1", relu0, config.relu1_hidden_size))
-        relu1 = tf.nn.dropout(relu1, self.keep_probability)
-        softmax = self.linear_layer("softmax", relu1, supertags_size)
+        penultimate = tf.tanh(self.linear_layer("penultimate", outputs, config.penultimate_hidden_size))
+        penultimate = tf.nn.dropout(penultimate, self.keep_probability)
+        softmax = self.linear_layer("softmax", penultimate, supertags_size)
 
         # Predictions are the indexes with the highest value from the softmax layer.
         self.predictions = tf.argmax(softmax, 2)
@@ -200,8 +198,7 @@ class SuperTaggerConfig(object):
         with open(config_file) as f:
             config = json.load(f)
             self.lstm_hidden_size = config["lstm_hidden_size"]
-            self.relu0_hidden_size = config["relu0_hidden_size"]
-            self.relu1_hidden_size = config["relu1_hidden_size"]
+            self.penultimate_hidden_size = config["penultimate_hidden_size"]
             self.num_layers = config["num_layers"]
             self.max_grad_norm = config["max_grad_norm"]
             self.num_epochs = config["num_epochs"]

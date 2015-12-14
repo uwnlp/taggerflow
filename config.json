@@ -1,13 +1,12 @@
 {
     "lstm_hidden_size": 128,
-    "relu0_hidden_size": 64,
-    "relu1_hidden_size": 64,
+    "penultimate_hidden_size": 64,
     "num_layers": 2,
-    "max_grad_norm": 5,
+    "max_grad_norm": 10,
     "num_epochs": 50,
     "learning_rate": 0.1,
     "max_tokens": 100,
-    "batch_size": 10,
+    "batch_size": 20,
     "keep_probability": 0.5,
     "embedding_sizes": {
         "prefix_1" : 32,
