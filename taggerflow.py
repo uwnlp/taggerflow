@@ -323,6 +323,9 @@ class SupertaggerTask(object):
     def get_validation_data(self):
         return self.dev_batches
 
+    def get_test_data(self):
+        return self.dev_batches
+
 class SupertaggerConfig(object):
 
     def __init__(self, supertag_space, embedding_spaces, config_file):
