@@ -1,6 +1,7 @@
 import os
 import time
 import urllib
+import logging
 
 def maybe_download(data_dir, source_url, filename):
     if not os.path.exists(data_dir):
@@ -17,8 +18,7 @@ def maybe_download(data_dir, source_url, filename):
     return filepath
 
 class Timer:
-    def __init__(self, logger, name, active=True):
-        self.logger = logger
+    def __init__(self, name, active=True):
         self.name = name if active else None
 
     def __enter__(self):
@@ -30,4 +30,4 @@ class Timer:
             self.tick(self.name)
 
     def tick(self, message):
-        self.logger.info("{} took {:.3f} seconds.".format(message, time.clock() - self.start))
+        logging.info("{} took {:.3f} seconds.".format(message, time.clock() - self.start))

@@ -21,24 +21,7 @@ import logging
 import ccgbank
 import util
 
-logger = None
-
-def initialize_logger(log_file):
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-
-    # create console handler and set level to info
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    logger.addHandler(handler)
-
-    # create file handler and set level to log
-    handler = logging.FileHandler(log_file)
-    handler.setLevel(logging.INFO)
-    logger.addHandler(handler)
-    return logger
-
-class SuperTaggerModel(object):
+class SupertaggerModel(object):
 
     def __init__(self, config):
         self.config = config
@@ -91,20 +74,18 @@ class SuperTaggerModel(object):
         softmax = self.linear_layer("softmax", penultimate, supertags_size)
 
         # Predictions are the indexes with the highest value from the softmax layer.
-        self.predictions = tf.argmax(softmax, 2)
+        self._prediction = tf.argmax(softmax, 2)
 
         # Cross-entropy loss.
         pseudo_batch_size = batch_size * max_tokens
-        self.loss = seq2seq.sequence_loss_by_example([tf.reshape(softmax, [pseudo_batch_size, -1])],
+        self._loss = seq2seq.sequence_loss_by_example([tf.reshape(softmax, [pseudo_batch_size, -1])],
                                                      [tf.reshape(self.y, [pseudo_batch_size])],
                                                      [tf.ones([pseudo_batch_size])],
                                                      supertags_size)
-        self.loss = tf.reduce_sum(self.loss) / batch_size
+        self._loss = tf.reduce_sum(self._loss) / batch_size
 
         # Construct training operation.
-        params = tf.trainable_variables()
-        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, params), config.max_grad_norm)
-        self.optimize = tf.train.GradientDescentOptimizer(config.learning_rate).apply_gradients(zip(grads, params))
+        self._optimizer = tf.train.AdamOptimizer()
 
     # xs contains (batch, timestep, x)
     # Performs y = xw + b.
@@ -117,98 +98,25 @@ class SuperTaggerModel(object):
         ys = tf.nn.xw_plus_b(flattened_xs, w, b)
         return tf.reshape(ys, [xs_dims[0], xs_dims[1], y_dim])
 
-    def get_embedding_indexes(self, token):
-        return [space.index(space.extract_from_token(token)) for space in self.config.embedding_spaces.values()]
+    def prediction(self):
+        return self._prediction
 
-    def get_batches(self, sentences):
-        data = [([self.get_embedding_indexes(t) for t in tokens], [self.config.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
+    def loss(self):
+        return self._loss
 
-        batch_size = self.config.batch_size
-        batches = []
-        num_batches = int(math.ceil(len(data)/float(batch_size)))
-        for i in range(num_batches):
-            batch_x = np.zeros([batch_size, self.config.max_tokens, len(self.config.embedding_spaces)], dtype=np.int32)
-            batch_y = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
-            batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
-            for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
-                if len(x) > self.config.max_tokens:
-                    logger.info("Skipping sentence of length {}.".format(len(x)))
-                    continue
-                batch_num_tokens[j] = len(x)
-                batch_x[j,:len(x):] = x
-                batch_y[j,:len(y)] = y
-            batches.append((batch_x, batch_y, batch_num_tokens))
-        return batches
+    def input_data(self):
+        return (self.x, self.num_tokens)
 
-    def evaluate(self, batches, session):
-        num_correct = 0
-        num_total = 0
-        for x,y,num_tokens in batches:
-            predictions = session.run(self.predictions, {
-                self.x: x,
-                self.num_tokens: num_tokens,
-                self.keep_probability: 1.0
-            })
-            for i,n in enumerate(num_tokens):
-                num_total += n
-                num_correct += sum(int(predictions[i,j] == y[i,j]) for j in range(n))
-        return (num_correct, num_total)
+    def ground_truth(self):
+        return self.y
 
-    def train(self, train_data, dev_data):
-        logger.info("Massaging data into mini-batch format...")
-        train_batches = self.get_batches(train_data)
-        dev_batches = self.get_batches(dev_data)
-        logger.info("Train batches: {}".format(len(train_batches)))
-        logger.info("Dev batches: {}".format(len(dev_batches)))
+    def optimizer(self):
+        return self._optimizer
 
-        logger.info("Starting training for {} epochs.".format(self.config.num_epochs))
-
-        with tf.Session() as session, util.Timer(logger, "Training") as timer:
-            tf.initialize_all_variables().run()
-
-            for name, space in self.config.embedding_spaces.items():
-                if isinstance(space, PretrainedEmbeddingSpace):
-                    with util.Timer(logger, "Loading pre-trained embeddings for {}".format(name)):
-                        session.run(tf.assign(self.embeddings_w[name], space.embeddings))
-
-            for epoch in range(self.config.num_epochs):
-                logger.info("========= Epoch {:02d} =========".format(epoch))
-                num_correct, num_total = self.evaluate(dev_batches, session)
-                logger.info("Validation accuracy: {:.3f}% ({}/{})".format((100.0 * num_correct)/num_total, num_correct, num_total))
-                train_loss = 0.0
-                for i,(x,y,num_tokens) in enumerate(train_batches):
-                    _, loss = session.run([self.optimize, self.loss], {
-                        self.x: x,
-                        self.y: y,
-                        self.num_tokens: num_tokens
-                    })
-                    train_loss += loss
-                    if i % 100 == 0:
-                        logger.info("{}/{} mean training loss: {:.3f}".format(i+1, len(train_batches), train_loss/(i+1)))
-                logger.info("Epoch mean training loss: {:.3f}".format(train_loss/len(train_batches)))
-                timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
-                logger.info("============================")
-
-class SuperTaggerConfig(object):
-
-    def __init__(self, supertag_space, embedding_spaces, config_file):
-        self.supertag_space = supertag_space
-        self.embedding_spaces = embedding_spaces
-
-        with open(config_file) as f:
-            config = json.load(f)
-            self.lstm_hidden_size = config["lstm_hidden_size"]
-            self.penultimate_hidden_size = config["penultimate_hidden_size"]
-            self.num_layers = config["num_layers"]
-            self.max_grad_norm = config["max_grad_norm"]
-            self.num_epochs = config["num_epochs"]
-            self.learning_rate = config["learning_rate"]
-            self.max_tokens = config["max_tokens"]
-            self.batch_size = config["batch_size"]
-            self.keep_probability = config["keep_probability"]
-            for name,size in config["embedding_sizes"].items():
-                if self.embedding_spaces[name].embedding_size is None:
-                    self.embedding_spaces[name].embedding_size = size
+    def initialize(self, session):
+        for name, space in self.config.embedding_spaces.items():
+            if isinstance(space, PretrainedEmbeddingSpace):
+                session.run(tf.assign(self.embeddings_w[name], space.embeddings))
 
 class FeatureSpace(object):
     def __init__(self, sentences, min_count=None):
@@ -307,35 +215,145 @@ class SuffixSpace(EmbeddingSpace):
     def extract_from_token(self, token):
         return token[-self.n:]
 
+class SupertaggerTask(object):
+
+    def __init__(self, config_file, debug):
+        train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits(debug)
+        logging.info("Train sentences: {}".format(len(train_sentences)))
+        logging.info("Dev sentences: {}".format(len(dev_sentences)))
+
+        supertag_space = SupertagSpace(train_sentences)
+        embedding_spaces = OrderedDict([("words",    WordSpace(util.maybe_download("data",
+                                                                                   "http://appositive.cs.washington.edu/resources/",
+                                                                                   "embeddings.raw"))),
+                                        ("prefix_1", PrefixSpace(train_sentences, 1, min_count=3)),
+                                        ("prefix_2", PrefixSpace(train_sentences, 2, min_count=3)),
+                                        ("prefix_3", PrefixSpace(train_sentences, 3, min_count=3)),
+                                        ("prefix_4", PrefixSpace(train_sentences, 4, min_count=3)),
+                                        ("suffix_1", SuffixSpace(train_sentences, 1, min_count=3)),
+                                        ("suffix_2", SuffixSpace(train_sentences, 2, min_count=3)),
+                                        ("suffix_3", SuffixSpace(train_sentences, 3, min_count=3)),
+                                        ("suffix_4", SuffixSpace(train_sentences, 4, min_count=3))])
+
+        logging.info("Number of supertags: {}".format(supertag_space.size()))
+        for name, space in embedding_spaces.items():
+            logging.info("Number of {}: {}".format(name, space.size()))
+
+        self.config = SupertaggerConfig(supertag_space, embedding_spaces, config_file)
+
+        logging.info("Massaging data into mini-batch format...")
+
+        self.train_batches = self.get_batches(train_sentences)
+        self.dev_batches = self.get_batches(dev_sentences)
+
+        logging.info("Train batches: {}".format(len(self.train_batches)))
+        logging.info("Dev batches: {}".format(len(self.dev_batches)))
+
+    def get_embedding_indexes(self, token):
+        return [space.index(space.extract_from_token(token)) for space in self.config.embedding_spaces.values()]
+
+    def get_batches(self, sentences):
+        data = [([self.get_embedding_indexes(t) for t in tokens], [self.config.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
+
+        batch_size = self.config.batch_size
+        batches = []
+        num_batches = int(math.ceil(len(data)/float(batch_size)))
+        for i in range(num_batches):
+            batch_x = np.zeros([batch_size, self.config.max_tokens, len(self.config.embedding_spaces)], dtype=np.int32)
+            batch_y = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
+            batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
+            for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
+                if len(x) > self.config.max_tokens:
+                    logging.info("Skipping sentence of length {}.".format(len(x)))
+                    continue
+                batch_num_tokens[j] = len(x)
+                batch_x[j,:len(x):] = x
+                batch_y[j,:len(y)] = y
+            batches.append(([batch_x, batch_num_tokens], batch_y))
+        return batches
+
+    def evaluate(self, session, data, model):
+        num_correct = 0
+        num_total = 0
+        for (x,num_tokens),y in data:
+            prediction = session.run(model.prediction(), {
+                model.x: x,
+                model.num_tokens: num_tokens,
+                model.keep_probability: 1.0
+            })
+            for i,n in enumerate(num_tokens):
+                num_total += n
+                num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n))
+        return (num_correct, num_total)
+
+    def train(self, model):
+        logging.info("Starting training for {} epochs.".format(self.config.num_epochs))
+
+        params = tf.trainable_variables()
+        grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss(), params), self.config.max_grad_norm)
+        optimize = model.optimizer().apply_gradients(zip(grads, params))
+
+        with tf.Session() as session, util.Timer("Training") as timer:
+            tf.initialize_all_variables().run()
+
+            with util.Timer(logging, "Initializing model."):
+                model.initialize(session)
+
+            for epoch in range(self.config.num_epochs):
+                logging.info("========= Epoch {:02d} =========".format(epoch))
+                num_correct, num_total = self.evaluate(session, self.get_validation_data(), model)
+                logging.info("Validation accuracy: {:.3f}% ({}/{})".format((100.0 * num_correct)/num_total, num_correct, num_total))
+                train_loss = 0.0
+                for i,((x,num_tokens),y) in enumerate(self.get_train_data()):
+                    _, loss = session.run([optimize, model.loss()], {
+                        model.x: x,
+                        model.y: y,
+                        model.num_tokens: num_tokens
+                    })
+                    train_loss += loss
+                    if i % 100 == 0:
+                        logging.info("{}/{} mean training loss: {:.3f}".format(i+1, len(self.get_train_data()), train_loss/(i+1)))
+                logging.info("Epoch mean training loss: {:.3f}".format(train_loss/len(self.get_train_data())))
+                timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
+                logging.info("============================")
+
+    def get_train_data(self):
+        return self.train_batches
+
+    def get_validation_data(self):
+        return self.dev_batches
+
+class SupertaggerConfig(object):
+
+    def __init__(self, supertag_space, embedding_spaces, config_file):
+        self.supertag_space = supertag_space
+        self.embedding_spaces = embedding_spaces
+
+        with open(config_file) as f:
+            config = json.load(f)
+            self.lstm_hidden_size = config["lstm_hidden_size"]
+            self.penultimate_hidden_size = config["penultimate_hidden_size"]
+            self.num_layers = config["num_layers"]
+            self.max_grad_norm = config["max_grad_norm"]
+            self.num_epochs = config["num_epochs"]
+            self.learning_rate = config["learning_rate"]
+            self.momentum = config["momentum"]
+            self.max_tokens = config["max_tokens"]
+            self.batch_size = config["batch_size"]
+            self.keep_probability = config["keep_probability"]
+            for name,size in config["embedding_sizes"].items():
+                if self.embedding_spaces[name].embedding_size is None:
+                    self.embedding_spaces[name].embedding_size = size
+
 if __name__ == "__main__":
+    logging.basicConfig(filename="info.log",level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler())
+
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="configuration json file")
     parser.add_argument("-d", "--debug", help="uses a smaller training set for debugging", action="store_true")
     args = parser.parse_args()
 
-    logger = initialize_logger("info.log")
-
-    train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits(args.debug)
-    logger.info("Train: {} | Dev: {} | Test: {}".format(len(train_sentences), len(dev_sentences), len(test_sentences)))
-
-
-    supertag_space = SupertagSpace(train_sentences)
-    embedding_spaces = OrderedDict([("words",    WordSpace(util.maybe_download("data",
-                                                                               "http://appositive.cs.washington.edu/resources/",
-                                                                               "embeddings.raw"))),
-                                    ("prefix_1", PrefixSpace(train_sentences, 1, min_count=3)),
-                                    ("prefix_2", PrefixSpace(train_sentences, 2, min_count=3)),
-                                    ("prefix_3", PrefixSpace(train_sentences, 3, min_count=3)),
-                                    ("prefix_4", PrefixSpace(train_sentences, 4, min_count=3)),
-                                    ("suffix_1", SuffixSpace(train_sentences, 1, min_count=3)),
-                                    ("suffix_2", SuffixSpace(train_sentences, 2, min_count=3)),
-                                    ("suffix_3", SuffixSpace(train_sentences, 3, min_count=3)),
-                                    ("suffix_4", SuffixSpace(train_sentences, 4, min_count=3))])
-
-    logger.info("Number of supertags: {}".format(supertag_space.size()))
-    for name, space in embedding_spaces.items():
-        logger.info("Number of {}: {}".format(name, space.size()))
-
-    config = SuperTaggerConfig(supertag_space, embedding_spaces, args.config)
-    model = SuperTaggerModel(config)
-    model.train(train_sentences, dev_sentences)
+    task = SupertaggerTask(args.config, args.debug)
+    model = SupertaggerModel(task.config)
+    task.train(model)
