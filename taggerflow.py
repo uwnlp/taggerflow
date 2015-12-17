@@ -27,11 +27,10 @@ TENSORBOARD_LOGDIR = "tensorboard_logs"
 
 class SupertaggerModel(object):
 
-    def __init__(self, config):
+    def __init__(self, config, batch_size):
         self.config = config
 
         # Redeclare some configuration settings for convenience.
-        batch_size = config.batch_size
         supertags_size = config.supertag_space.size()
         embedding_spaces = config.embedding_spaces
         max_tokens = config.max_tokens
@@ -271,8 +270,8 @@ class SupertaggerTask(object):
 
         logging.info("Massaging data into mini-batch format...")
 
-        self.train_batches = self.get_batches(train_sentences)
-        self.dev_batches = self.get_batches(dev_sentences)
+        self.train_batches = self.get_batches(train_sentences, self.config.batch_size)
+        self.dev_batches = self.get_batches(dev_sentences, len(dev_sentences))
 
         logging.info("Train batches: {}".format(len(self.train_batches)))
         logging.info("Dev batches: {}".format(len(self.dev_batches)))
@@ -280,10 +279,9 @@ class SupertaggerTask(object):
     def get_embedding_indexes(self, token):
         return [space.index(space.extract_from_token(token)) for space in self.config.embedding_spaces.values()]
 
-    def get_batches(self, sentences):
+    def get_batches(self, sentences, batch_size):
         data = [([self.get_embedding_indexes(t) for t in tokens], [self.config.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
 
-        batch_size = self.config.batch_size
         batches = []
         num_batches = int(math.ceil(len(data)/float(batch_size)))
         for i in range(num_batches):
@@ -300,36 +298,41 @@ class SupertaggerTask(object):
             batches.append(([batch_x, batch_num_tokens], batch_y))
         return batches
 
-    def train(self, model, run_name):
-        logging.info("Starting training for {} epochs.".format(self.config.num_epochs))
-
-        with tf.name_scope("training"):
-            global_step = tf.Variable(0, name="global_step", trainable=False)
-            params = tf.trainable_variables()
-            grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss, params), self.config.max_grad_norm)
-            optimize = model.optimizer.apply_gradients(zip(grads, params), global_step=global_step)
-
+    def train(self, run_name):
         with tf.name_scope("initialization"):
             initializer = tf.random_uniform_initializer(-self.config.init_scale,
                                                         self.config.init_scale, seed=self.config.seed)
 
-        with tf.Session() as session, tf.variable_scope("model", initializer=initializer), util.Timer("Training") as timer:
+        with tf.variable_scope("model", reuse=None, initializer=initializer):
+            train_model = SupertaggerModel(self.config, self.config.batch_size)
+        with tf.variable_scope("model", reuse=True, initializer=initializer):
+            dev_model = SupertaggerModel(self.config, self.get_validation_data()[0][1].shape[0])
+
+        with tf.name_scope("training"):
+            global_step = tf.Variable(0, name="global_step", trainable=False)
+            params = tf.trainable_variables()
+            grads, _ = tf.clip_by_global_norm(tf.gradients(train_model.loss, params), self.config.max_grad_norm)
+            optimize = train_model.optimizer.apply_gradients(zip(grads, params), global_step=global_step)
+
+        with tf.Session() as session, util.Timer("Training") as timer:
             writer = tf.train.SummaryWriter(os.path.join(TENSORBOARD_LOGDIR, run_name), graph_def=session.graph_def, flush_secs=60)
 
             tf.initialize_all_variables().run()
 
             with util.Timer("Initializing model"):
-                model.initialize(session)
+                train_model.initialize(session)
 
-            with SupertaggerEvaluationContext(session, self.get_validation_data(), model, global_step, writer):
+            logging.info("Starting training for {} epochs.".format(self.config.num_epochs))
+
+            with SupertaggerEvaluationContext(session, self.get_validation_data(), dev_model, global_step, writer):
                 for epoch in range(self.config.num_epochs):
                     logging.info("========= Epoch {:02d} =========".format(epoch))
                     train_loss = 0.0
                     for i,((x,num_tokens),y) in enumerate(self.get_train_data()):
-                        _, loss = session.run([optimize, model.loss], {
-                            model.x: x,
-                            model.y: y,
-                            model.num_tokens: num_tokens
+                        _, loss = session.run([optimize, train_model.loss], {
+                            train_model.x: x,
+                            train_model.y: y,
+                            train_model.num_tokens: num_tokens
                         })
                         train_loss += loss
                         if i % 10 == 0:
@@ -391,5 +394,4 @@ if __name__ == "__main__":
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     task = SupertaggerTask(args.config, args.debug)
-    model = SupertaggerModel(task.config)
-    task.train(model, args.run_name)
+    task.train(args.run_name)
