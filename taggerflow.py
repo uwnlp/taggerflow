@@ -27,7 +27,7 @@ TENSORBOARD_LOGDIR = "tensorboard_logs"
 
 class SupertaggerModel(object):
 
-    def __init__(self, config, gpu_device=None):
+    def __init__(self, config):
         self.config = config
 
         # Redeclare some configuration settings for convenience.
@@ -55,18 +55,20 @@ class SupertaggerModel(object):
             inputs = tf.split(1, max_tokens, concat_embedding)
             inputs = [tf.squeeze(i, [1]) for i in inputs]
 
+            cell_state_size = concat_embedding.get_shape()[2].value
+
             # LSTM cell is replicated across stacks and timesteps.
-            lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value)
+            lstm_cell = rnn_cell.BasicLSTMCell(cell_state_size)
             cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
 
             # Both LSTMs have their own initial state.
-            initial_state_fw = cell.zero_state(batch_size, tf.float32)
-            initial_state_bw = cell.zero_state(batch_size, tf.float32)
+            initial_state_fw = tf.get_variable("initial_state_fw", [1, cell.state_size])
+            initial_state_bw = tf.get_variable("initial_state_bw", [1, cell.state_size])
 
             # Construct LSTM.
             outputs = rnn.bidirectional_rnn(cell, cell, inputs,
-                                            initial_state_fw=initial_state_fw,
-                                            initial_state_bw=initial_state_bw,
+                                            initial_state_fw=tf.tile(initial_state_fw, [batch_size, 1]),
+                                            initial_state_bw=tf.tile(initial_state_bw, [batch_size, 1]),
                                             sequence_length=self.num_tokens)
 
             # Rejoin LSTM outputs.
@@ -389,5 +391,5 @@ if __name__ == "__main__":
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     task = SupertaggerTask(args.config, args.debug)
-    model = SupertaggerModel(task.config, args.gpu)
+    model = SupertaggerModel(task.config)
     task.train(model, args.run_name)
