@@ -1,4 +1,6 @@
 {
+    "seed": 1234,
+    "init_scale": 0.05,
     "penultimate_hidden_size": 64,
     "num_layers": 2,
     "max_grad_norm": 10.0,

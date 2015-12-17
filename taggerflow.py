@@ -293,7 +293,11 @@ class SupertaggerTask(object):
         grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss(), params), self.config.max_grad_norm)
         optimize = model.optimizer().apply_gradients(zip(grads, params))
 
-        with tf.Session() as session, util.Timer("Training") as timer:
+
+        initializer = tf.random_uniform_initializer(-self.config.init_scale,
+                                                    self.config.init_scale, seed=self.config.seed)
+
+        with tf.Session() as session, tf.variable_scope("model", initializer=initializer), util.Timer("Training") as timer:
             tf.initialize_all_variables().run()
 
             with util.Timer("Initializing model"):
@@ -335,6 +339,8 @@ class SupertaggerConfig(object):
 
         with open(config_file) as f:
             config = json.load(f)
+            self.init_scale = config["init_scale"]
+            self.seed = config["seed"]
             self.penultimate_hidden_size = config["penultimate_hidden_size"]
             self.num_layers = config["num_layers"]
             self.max_grad_norm = config["max_grad_norm"]

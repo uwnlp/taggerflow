@@ -32,5 +32,5 @@ class Timer:
 
     def tick(self, message):
         current = time.time()
-        logging.info("{} took {:.3f} seconds ({:.3f} seconds last tick).".format(message, current - self.start, current - self.last_tick))
+        logging.info("{} took {:.3f} seconds ({:.3f} seconds since last tick).".format(message, current - self.start, current - self.last_tick))
         self.last_tick = current
