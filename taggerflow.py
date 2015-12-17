@@ -49,8 +49,9 @@ class SupertaggerModel(object):
         initial_state_bw = cell.zero_state(batch_size, tf.float32)
 
         # From feature indexes to concatenated embeddings.
-        self.embeddings_w = OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items() )
-        embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(self.embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
+        with tf.device("/cpu:0"):
+            self.embeddings_w = OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items() )
+            embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(self.embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
         concat_embedding = tf.concat(2, embeddings)
 
         # From concatenated embeddings to LSTM inputs.
