@@ -39,25 +39,24 @@ class SupertaggerModel(object):
         self.num_tokens = tf.placeholder(tf.int64, [batch_size])
         self.keep_probability = tf.constant(config.keep_probability)
 
-        # LSTM cell is replicated across stacks and timesteps.
-        lstm_cell = rnn_cell.BasicLSTMCell(lstm_hidden_size, forget_bias=1.0)
-        lstm_cell = rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=self.keep_probability)
-        cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
-
-        # Both LSTMs have their own initial state.
-        initial_state_fw = cell.zero_state(batch_size, tf.float32)
-        initial_state_bw = cell.zero_state(batch_size, tf.float32)
-
         # From feature indexes to concatenated embeddings.
         with tf.device("/cpu:0"):
             self.embeddings_w = OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items() )
             embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(self.embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
         concat_embedding = tf.concat(2, embeddings)
 
-        # From concatenated embeddings to LSTM inputs.
-        inputs = self.linear_layer("concat", concat_embedding, lstm_hidden_size)
-        inputs = tf.split(1, max_tokens, inputs)
+        # Split into LSTM inputs.
+        inputs = tf.split(1, max_tokens, concat_embedding)
         inputs = [tf.squeeze(i, [1]) for i in inputs]
+
+        # LSTM cell is replicated across stacks and timesteps.
+        lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value, forget_bias=1.0)
+        lstm_cell = rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=self.keep_probability)
+        cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
+
+        # Both LSTMs have their own initial state.
+        initial_state_fw = cell.zero_state(batch_size, tf.float32)
+        initial_state_bw = cell.zero_state(batch_size, tf.float32)
 
         # Construct LSTM.
         outputs = rnn.bidirectional_rnn(cell, cell, inputs,
@@ -86,7 +85,7 @@ class SupertaggerModel(object):
         self._loss = tf.reduce_sum(self._loss) / batch_size
 
         # Construct training operation.
-        self._optimizer = tf.train.AdamOptimizer()
+        self._optimizer = tf.train.GradientDescentOptimizer(self.config.learning_rate)
 
     # xs contains (batch, timestep, x)
     # Performs y = xw + b.
@@ -297,7 +296,7 @@ class SupertaggerTask(object):
         with tf.Session() as session, util.Timer("Training") as timer:
             tf.initialize_all_variables().run()
 
-            with util.Timer(logging, "Initializing model."):
+            with util.Timer("Initializing model"):
                 model.initialize(session)
 
             for epoch in range(self.config.num_epochs):
@@ -335,7 +334,6 @@ class SupertaggerConfig(object):
 
         with open(config_file) as f:
             config = json.load(f)
-            self.lstm_hidden_size = config["lstm_hidden_size"]
             self.penultimate_hidden_size = config["penultimate_hidden_size"]
             self.num_layers = config["num_layers"]
             self.max_grad_norm = config["max_grad_norm"]

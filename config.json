@@ -1,5 +1,4 @@
 {
-    "lstm_hidden_size": 128,
     "penultimate_hidden_size": 64,
     "num_layers": 2,
     "max_grad_norm": 10.0,
