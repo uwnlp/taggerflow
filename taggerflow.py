@@ -5,6 +5,7 @@ import sys
 import json
 import math
 import argparse
+import time
 
 from collections import defaultdict
 from collections import OrderedDict
@@ -211,6 +212,35 @@ class SuffixSpace(EmbeddingSpace):
     def extract_from_token(self, token):
         return token[-self.n:]
 
+class SupertaggerEvaluationContext(util.ThreadedContext):
+    def __init__(self, session, data, model, global_step, writer):
+        super(SupertaggerEvaluationContext, self).__init__()
+        self.session = session
+        self.data = data
+        self.model = model
+        self.global_step = global_step
+        self.writer = writer
+
+    def loop(self):
+        time.sleep(120)
+        with util.Timer("Dev evaluation"):
+            num_correct = 0
+            num_total = 0
+            for (x,num_tokens),y in self.data:
+                prediction = self.session.run(self.model.prediction, {
+                    self.model.x: x,
+                    self.model.num_tokens: num_tokens,
+                    self.model.keep_probability: 1.0
+                })
+                for i,n in enumerate(num_tokens):
+                    num_total += n
+                    num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n))
+
+            accuracy = (100.0 * num_correct)/num_total
+            self.writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Dev Accuracy", simple_value=accuracy)]),
+                                    tf.train.global_step(self.session, self.global_step))
+            logging.info("Dev accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
+
 class SupertaggerTask(object):
 
     def __init__(self, config_file, debug):
@@ -268,27 +298,14 @@ class SupertaggerTask(object):
             batches.append(([batch_x, batch_num_tokens], batch_y))
         return batches
 
-    def evaluate(self, session, data, model):
-        num_correct = 0
-        num_total = 0
-        for (x,num_tokens),y in data:
-            prediction = session.run(model.prediction, {
-                model.x: x,
-                model.num_tokens: num_tokens,
-                model.keep_probability: 1.0
-            })
-            for i,n in enumerate(num_tokens):
-                num_total += n
-                num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n))
-        return (num_correct, num_total)
-
     def train(self, model, run_name):
         logging.info("Starting training for {} epochs.".format(self.config.num_epochs))
 
         with tf.name_scope("training"):
+            global_step = tf.Variable(0, name="global_step", trainable=False)
             params = tf.trainable_variables()
             grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss, params), self.config.max_grad_norm)
-            optimize = model.optimizer.apply_gradients(zip(grads, params))
+            optimize = model.optimizer.apply_gradients(zip(grads, params), global_step=global_step)
 
         with tf.name_scope("initialization"):
             initializer = tf.random_uniform_initializer(-self.config.init_scale,
@@ -302,33 +319,27 @@ class SupertaggerTask(object):
             with util.Timer("Initializing model"):
                 model.initialize(session)
 
-            for epoch in range(self.config.num_epochs):
-                logging.info("========= Epoch {:02d} =========".format(epoch))
-                train_loss = 0.0
-                for i,((x,num_tokens),y) in enumerate(self.get_train_data()):
-                    _, loss = session.run([optimize, model.loss], {
-                        model.x: x,
-                        model.y: y,
-                        model.num_tokens: num_tokens
-                    })
-                    train_loss += loss
-                    if i % 10 == 0:
-                        logging.info("{}/{} mean training loss: {:.3f}".format(i+1, len(self.get_train_data()), train_loss/(i+1)))
+            with SupertaggerEvaluationContext(session, self.get_validation_data(), model, global_step, writer):
+                for epoch in range(self.config.num_epochs):
+                    logging.info("========= Epoch {:02d} =========".format(epoch))
+                    train_loss = 0.0
+                    for i,((x,num_tokens),y) in enumerate(self.get_train_data()):
+                        _, loss = session.run([optimize, model.loss], {
+                            model.x: x,
+                            model.y: y,
+                            model.num_tokens: num_tokens
+                        })
+                        train_loss += loss
+                        if i % 10 == 0:
+                            logging.info("{}/{} mean training loss: {:.3f}".format(i+1, len(self.get_train_data()), train_loss/(i+1)))
 
-                train_loss = train_loss / len(self.get_train_data())
-                writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Loss", simple_value=train_loss)]),
-                                   (epoch + 1) * len(self.get_train_data()))
-                logging.info("Epoch mean training loss: {:.3f}".format(train_loss))
+                    train_loss = train_loss / len(self.get_train_data())
+                    writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Loss", simple_value=train_loss)]),
+                                       tf.train.global_step(session, global_step))
+                    logging.info("Epoch mean training loss: {:.3f}".format(train_loss))
 
-                with util.Timer("Validation evaluation"):
-                    num_correct, num_total = self.evaluate(session, self.get_validation_data(), model)
-                    accuracy = (100.0 * num_correct)/num_total
-                    writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Dev Accuracy", simple_value=accuracy)]),
-                                       (epoch + 1) * len(self.get_train_data()))
-                    logging.info("Validation accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
-
-                timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
-                logging.info("============================")
+                    timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
+                    logging.info("============================")
 
     def get_train_data(self):
         return self.train_batches

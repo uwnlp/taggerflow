@@ -2,6 +2,7 @@ import os
 import time
 import urllib
 import logging
+import threading
 
 def maybe_download(data_dir, source_url, filename):
     if not os.path.exists(data_dir):
@@ -34,3 +35,23 @@ class Timer:
         current = time.time()
         logging.info("{} took {:.3f} seconds ({:.3f} seconds since last tick).".format(message, current - self.start, current - self.last_tick))
         self.last_tick = current
+
+class ThreadedContext(object):
+    def __init__(self):
+          self.thread = threading.Thread(target=self.run)
+          self.stop = False
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self.stop = True
+        self.thread.join()
+
+    def run(self):
+        while not self.stop:
+            self.loop()
+
+    def loop(self):
+        raise NotImplementedError("Subclasses must implement this!")
