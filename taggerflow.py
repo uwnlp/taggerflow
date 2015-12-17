@@ -95,6 +95,10 @@ class SupertaggerModel(object):
             # Only average across valid tokens rather than padding.
             self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
 
+            # Add L2 regularization for all trainable parameters.
+            self.params = tf.trainable_variables()
+            self.loss += 10e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
+
         # Construct training operation.
         self.optimizer = tf.train.AdamOptimizer()
 
@@ -314,9 +318,8 @@ class SupertaggerTask(object):
 
         with tf.name_scope("training"):
             global_step = tf.Variable(0, name="global_step", trainable=False)
-            params = tf.trainable_variables()
-            grads, _ = tf.clip_by_global_norm(tf.gradients(train_model.loss, params), self.config.max_grad_norm)
-            optimize = train_model.optimizer.apply_gradients(zip(grads, params), global_step=global_step)
+            grads, _ = tf.clip_by_global_norm(tf.gradients(train_model.loss, train_model.params), self.config.max_grad_norm)
+            optimize = train_model.optimizer.apply_gradients(zip(grads, train_model.params), global_step=global_step)
 
         with tf.Session() as session, util.Timer("Training") as timer:
             writer = tf.train.SummaryWriter(os.path.join(self.logdir, run_name), graph_def=session.graph_def, flush_secs=60)
