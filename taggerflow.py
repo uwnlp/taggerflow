@@ -78,19 +78,19 @@ class SupertaggerModel(object):
 
         with tf.name_scope("prediction"):
             # Predictions are the indexes with the highest value from the softmax layer.
-            self._prediction = tf.argmax(softmax, 2)
+            self.prediction = tf.argmax(softmax, 2)
 
         with tf.name_scope("loss"):
             # Cross-entropy loss.
             pseudo_batch_size = batch_size * max_tokens
-            self._loss = seq2seq.sequence_loss_by_example([tf.reshape(softmax, [pseudo_batch_size, -1])],
-                                                          [tf.reshape(self.y, [pseudo_batch_size])],
-                                                          [tf.ones([pseudo_batch_size])],
-                                                          supertags_size)
-            self._loss = tf.reduce_sum(self._loss) / batch_size
+            self.loss = seq2seq.sequence_loss_by_example([tf.reshape(softmax, [pseudo_batch_size, -1])],
+                                                         [tf.reshape(self.y, [pseudo_batch_size])],
+                                                         [tf.ones([pseudo_batch_size])],
+                                                         supertags_size)
+            self.loss = tf.reduce_sum(self.loss) / batch_size
 
         # Construct training operation.
-        self._optimizer = tf.train.GradientDescentOptimizer(self.config.learning_rate)
+        self.optimizer = tf.train.GradientDescentOptimizer(self.config.learning_rate)
 
     # xs contains (batch, timestep, x)
     # Performs y = xw + b.
@@ -102,21 +102,6 @@ class SupertaggerModel(object):
         flattened_xs = tf.reshape(xs, [-1, xs_dims[2]])
         ys = tf.nn.xw_plus_b(flattened_xs, w, b)
         return tf.reshape(ys, [xs_dims[0], xs_dims[1], y_dim])
-
-    def prediction(self):
-        return self._prediction
-
-    def loss(self):
-        return self._loss
-
-    def input_data(self):
-        return (self.x, self.num_tokens)
-
-    def ground_truth(self):
-        return self.y
-
-    def optimizer(self):
-        return self._optimizer
 
     def initialize(self, session):
         for name, space in self.config.embedding_spaces.items():
@@ -281,7 +266,7 @@ class SupertaggerTask(object):
         num_correct = 0
         num_total = 0
         for (x,num_tokens),y in data:
-            prediction = session.run(model.prediction(), {
+            prediction = session.run(model.prediction, {
                 model.x: x,
                 model.num_tokens: num_tokens,
                 model.keep_probability: 1.0
@@ -296,8 +281,8 @@ class SupertaggerTask(object):
 
         with tf.name_scope("training"):
             params = tf.trainable_variables()
-            grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss(), params), self.config.max_grad_norm)
-            optimize = model.optimizer().apply_gradients(zip(grads, params))
+            grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss, params), self.config.max_grad_norm)
+            optimize = model.optimizer.apply_gradients(zip(grads, params))
 
         with tf.name_scope("initialization"):
             initializer = tf.random_uniform_initializer(-self.config.init_scale,
@@ -315,7 +300,7 @@ class SupertaggerTask(object):
                 logging.info("========= Epoch {:02d} =========".format(epoch))
                 train_loss = 0.0
                 for i,((x,num_tokens),y) in enumerate(self.get_train_data()):
-                    _, loss = session.run([optimize, model.loss()], {
+                    _, loss = session.run([optimize, model.loss], {
                         model.x: x,
                         model.y: y,
                         model.num_tokens: num_tokens
