@@ -97,7 +97,7 @@ class SupertaggerModel(object):
             self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
 
         # Construct training operation.
-        self.optimizer = tf.train.GradientDescentOptimizer(self.config.learning_rate)
+        self.optimizer = tf.train.AdamOptimizer()
 
     # xs contains (batch, timestep, x)
     # Performs y = xw + b.
