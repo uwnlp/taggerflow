@@ -83,11 +83,16 @@ class SupertaggerModel(object):
         with tf.name_scope("loss"):
             # Cross-entropy loss.
             pseudo_batch_size = batch_size * max_tokens
-            self.loss = seq2seq.sequence_loss_by_example([tf.reshape(softmax, [pseudo_batch_size, -1])],
-                                                         [tf.reshape(self.y, [pseudo_batch_size])],
-                                                         [tf.ones([pseudo_batch_size])],
-                                                         supertags_size)
-            self.loss = tf.reduce_sum(self.loss) / batch_size
+
+            self.loss = seq2seq.sequence_loss([tf.reshape(softmax, [pseudo_batch_size, -1])],
+                                              [tf.reshape(self.y, [pseudo_batch_size])],
+                                              [tf.ones([pseudo_batch_size])],
+                                              supertags_size,
+                                              average_across_timesteps=False,
+                                              average_across_batch=False)
+
+            # Only average across valid tokens rather than padding.
+            self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
 
         # Construct training operation.
         self.optimizer = tf.train.GradientDescentOptimizer(self.config.learning_rate)
