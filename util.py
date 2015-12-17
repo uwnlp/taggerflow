@@ -22,12 +22,15 @@ class Timer:
         self.name = name if active else None
 
     def __enter__(self):
-        self.start = time.clock()
+        self.start = time.time()
+        self.last_tick = self.start
         return self
 
     def __exit__(self, *args):
         if self.name is not None:
-            self.tick(self.name)
+            logging.info("{} took {:.3f} seconds.".format(self.name, time.time() - self.start))
 
     def tick(self, message):
-        logging.info("{} took {:.3f} seconds.".format(message, time.clock() - self.start))
+        current = time.time()
+        logging.info("{} took {:.3f} seconds ({:.3f} seconds last tick).".format(message, current - self.start, current - self.last_tick))
+        self.last_tick = current

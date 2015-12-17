@@ -301,7 +301,8 @@ class SupertaggerTask(object):
 
             for epoch in range(self.config.num_epochs):
                 logging.info("========= Epoch {:02d} =========".format(epoch))
-                num_correct, num_total = self.evaluate(session, self.get_validation_data(), model)
+                with util.Timer("Validation evaluation"):
+                    num_correct, num_total = self.evaluate(session, self.get_validation_data(), model)
                 logging.info("Validation accuracy: {:.3f}% ({}/{})".format((100.0 * num_correct)/num_total, num_correct, num_total))
                 train_loss = 0.0
                 for i,((x,num_tokens),y) in enumerate(self.get_train_data()):
