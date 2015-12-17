@@ -23,14 +23,13 @@ import util
 
 class SupertaggerModel(object):
 
-    def __init__(self, config):
+    def __init__(self, config, gpu_device=None):
         self.config = config
 
         # Redeclare some configuration settings for convenience.
         batch_size = config.batch_size
         supertags_size = config.supertag_space.size()
         embedding_spaces = config.embedding_spaces
-        lstm_hidden_size = config.lstm_hidden_size
         max_tokens = config.max_tokens
 
         # Each training step is batched with a maximum length.
@@ -45,47 +44,48 @@ class SupertaggerModel(object):
             embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(self.embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
         concat_embedding = tf.concat(2, embeddings)
 
-        # Split into LSTM inputs.
-        inputs = tf.split(1, max_tokens, concat_embedding)
-        inputs = [tf.squeeze(i, [1]) for i in inputs]
+        with tf.device(gpu_device):
+            # Split into LSTM inputs.
+            inputs = tf.split(1, max_tokens, concat_embedding)
+            inputs = [tf.squeeze(i, [1]) for i in inputs]
 
-        # LSTM cell is replicated across stacks and timesteps.
-        lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value, forget_bias=1.0)
-        lstm_cell = rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=self.keep_probability)
-        cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
+            # LSTM cell is replicated across stacks and timesteps.
+            lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value, forget_bias=1.0)
+            lstm_cell = rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=self.keep_probability)
+            cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
 
-        # Both LSTMs have their own initial state.
-        initial_state_fw = cell.zero_state(batch_size, tf.float32)
-        initial_state_bw = cell.zero_state(batch_size, tf.float32)
+            # Both LSTMs have their own initial state.
+            initial_state_fw = cell.zero_state(batch_size, tf.float32)
+            initial_state_bw = cell.zero_state(batch_size, tf.float32)
 
-        # Construct LSTM.
-        outputs = rnn.bidirectional_rnn(cell, cell, inputs,
-                                        initial_state_fw=initial_state_fw,
-                                        initial_state_bw=initial_state_bw,
-                                        sequence_length=self.num_tokens)
+            # Construct LSTM.
+            outputs = rnn.bidirectional_rnn(cell, cell, inputs,
+                                            initial_state_fw=initial_state_fw,
+                                            initial_state_bw=initial_state_bw,
+                                            sequence_length=self.num_tokens)
 
-        # Rejoin LSTM outputs.
-        outputs = tf.concat(1, outputs)
-        outputs = tf.reshape(outputs, [batch_size, max_tokens, -1])
+            # Rejoin LSTM outputs.
+            outputs = tf.concat(1, outputs)
+            outputs = tf.reshape(outputs, [batch_size, max_tokens, -1])
 
-        # From LSTM outputs to softmax.
-        penultimate = tf.tanh(self.linear_layer("penultimate", outputs, config.penultimate_hidden_size))
-        penultimate = tf.nn.dropout(penultimate, self.keep_probability)
-        softmax = self.linear_layer("softmax", penultimate, supertags_size)
+            # From LSTM outputs to softmax.
+            penultimate = tf.tanh(self.linear_layer("penultimate", outputs, config.penultimate_hidden_size))
+            penultimate = tf.nn.dropout(penultimate, self.keep_probability)
+            softmax = self.linear_layer("softmax", penultimate, supertags_size)
 
-        # Predictions are the indexes with the highest value from the softmax layer.
-        self._prediction = tf.argmax(softmax, 2)
+            # Predictions are the indexes with the highest value from the softmax layer.
+            self._prediction = tf.argmax(softmax, 2)
 
-        # Cross-entropy loss.
-        pseudo_batch_size = batch_size * max_tokens
-        self._loss = seq2seq.sequence_loss_by_example([tf.reshape(softmax, [pseudo_batch_size, -1])],
-                                                     [tf.reshape(self.y, [pseudo_batch_size])],
-                                                     [tf.ones([pseudo_batch_size])],
-                                                     supertags_size)
-        self._loss = tf.reduce_sum(self._loss) / batch_size
+            # Cross-entropy loss.
+            pseudo_batch_size = batch_size * max_tokens
+            self._loss = seq2seq.sequence_loss_by_example([tf.reshape(softmax, [pseudo_batch_size, -1])],
+                                                          [tf.reshape(self.y, [pseudo_batch_size])],
+                                                          [tf.ones([pseudo_batch_size])],
+                                                          supertags_size)
+            self._loss = tf.reduce_sum(self._loss) / batch_size
 
-        # Construct training operation.
-        self._optimizer = tf.train.GradientDescentOptimizer(self.config.learning_rate)
+            # Construct training operation.
+            self._optimizer = tf.train.GradientDescentOptimizer(self.config.learning_rate)
 
     # xs contains (batch, timestep, x)
     # Performs y = xw + b.
@@ -293,7 +293,8 @@ class SupertaggerTask(object):
         grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss(), params), self.config.max_grad_norm)
         optimize = model.optimizer().apply_gradients(zip(grads, params))
 
-        with tf.Session() as session, util.Timer("Training") as timer:
+        tf_config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)
+        with tf.Session(config=tf_config) as session, util.Timer("Training") as timer:
             tf.initialize_all_variables().run()
 
             with util.Timer("Initializing model"):
@@ -354,8 +355,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="configuration json file")
     parser.add_argument("-d", "--debug", help="uses a smaller training set for debugging", action="store_true")
+    parser.add_argument("-g", "--gpu", help="specify a specific gpu device to use")
     args = parser.parse_args()
 
     task = SupertaggerTask(args.config, args.debug)
-    model = SupertaggerModel(task.config)
+    model = SupertaggerModel(task.config, args.gpu)
     task.train(model)
