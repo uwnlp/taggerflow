@@ -23,8 +23,6 @@ import logging
 import ccgbank
 import util
 
-TENSORBOARD_LOGDIR = "tensorboard_logs"
-
 class SupertaggerModel(object):
 
     def __init__(self, config, batch_size):
@@ -163,13 +161,16 @@ class EmbeddingSpace(FeatureSpace):
         raise NotImplementedError("Subclasses must implement this!")
 
 class PretrainedEmbeddingSpace(EmbeddingSpace):
-    def __init__(self, embeddings_file):
+    def __init__(self, embeddings_file, debug=False):
         already_added = set()
         self.embedding_size = None
         self.space = []
         self.embeddings = []
         with open(embeddings_file) as f:
             for i,line in enumerate(f.readlines()):
+                if debug and i > 10:
+                    break
+
                 splits = line.split()
                 word = splits[0].lower()
 
@@ -191,8 +192,8 @@ class PretrainedEmbeddingSpace(EmbeddingSpace):
         self.ispace = defaultdict(lambda:0, {f:i for i,f in enumerate(self.space)})
 
 class WordSpace(PretrainedEmbeddingSpace):
-    def __init__(self, embeddings_file):
-        super(WordSpace, self).__init__(embeddings_file)
+    def __init__(self, embeddings_file, debug=False):
+        super(WordSpace, self).__init__(embeddings_file, debug)
 
     def extract_from_token(self, token):
         return token.lower()
@@ -244,15 +245,18 @@ class SupertaggerEvaluationContext(util.ThreadedContext):
 
 class SupertaggerTask(object):
 
-    def __init__(self, config_file, debug):
+    def __init__(self, config_file, logdir, debug):
+        self.logdir = logdir
+
         train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits(debug)
         logging.info("Train sentences: {}".format(len(train_sentences)))
         logging.info("Dev sentences: {}".format(len(dev_sentences)))
 
+
         supertag_space = SupertagSpace(train_sentences)
         embedding_spaces = OrderedDict([("words",    WordSpace(util.maybe_download("data",
                                                                                    "http://appositive.cs.washington.edu/resources/",
-                                                                                   "embeddings.raw"))),
+                                                                                   "embeddings.raw"), debug)),
                                         ("prefix_1", PrefixSpace(train_sentences, 1, min_count=3)),
                                         ("prefix_2", PrefixSpace(train_sentences, 2, min_count=3)),
                                         ("prefix_3", PrefixSpace(train_sentences, 3, min_count=3)),
@@ -315,7 +319,7 @@ class SupertaggerTask(object):
             optimize = train_model.optimizer.apply_gradients(zip(grads, params), global_step=global_step)
 
         with tf.Session() as session, util.Timer("Training") as timer:
-            writer = tf.train.SummaryWriter(os.path.join(TENSORBOARD_LOGDIR, run_name), graph_def=session.graph_def, flush_secs=60)
+            writer = tf.train.SummaryWriter(os.path.join(self.logdir, run_name), graph_def=session.graph_def, flush_secs=60)
 
             tf.initialize_all_variables().run()
 
@@ -385,13 +389,16 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--debug", help="uses a smaller training set for debugging", action="store_true")
     parser.add_argument("-r", "--run_name", help="named used to identify logs", default="default")
     parser.add_argument("-g", "--gpu", help="specify gpu devices to use")
+    parser.add_argument("-l", "--logdir", help="directory to contain logs", default="logs")
     args = parser.parse_args()
 
-    logging.basicConfig(filename=(args.run_name + ".log"),level=logging.INFO)
+    if not os.path.exists(args.logdir):
+        os.makedirs(args.logdir)
+    logging.basicConfig(filename=os.path.join(args.logdir, args.run_name + ".log"), level=logging.INFO)
     logging.getLogger().addHandler(logging.StreamHandler())
 
     if args.gpu is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    task = SupertaggerTask(args.config, args.debug)
+    task = SupertaggerTask(args.config, args.logdir, args.debug)
     task.train(args.run_name)
