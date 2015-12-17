@@ -22,6 +22,8 @@ import logging
 import ccgbank
 import util
 
+TENSORBOARD_LOGDIR = "tensorboard_logs"
+
 class SupertaggerModel(object):
 
     def __init__(self, config, gpu_device=None):
@@ -38,13 +40,14 @@ class SupertaggerModel(object):
             self.x = tf.placeholder(tf.int32, [batch_size, max_tokens, len(embedding_spaces)], name="x")
             self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
-            self.keep_probability = tf.constant(config.keep_probability, name="keep_probability")
+            self.keep_probability = tf.constant(config.keep_probability, tf.float32, [], name="keep_probability")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"), tf.device("/cpu:0"):
             self.embeddings_w = OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items() )
             embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(self.embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(2, embeddings)
+            concat_embedding = tf.nn.dropout(concat_embedding, self.keep_probability)
 
         with tf.name_scope("lstm"):
             # Split into LSTM inputs.
@@ -52,8 +55,7 @@ class SupertaggerModel(object):
             inputs = [tf.squeeze(i, [1]) for i in inputs]
 
             # LSTM cell is replicated across stacks and timesteps.
-            lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value, forget_bias=1.0)
-            lstm_cell = rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=self.keep_probability)
+            lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value)
             cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
 
             # Both LSTMs have their own initial state.
@@ -73,7 +75,6 @@ class SupertaggerModel(object):
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
             penultimate = tf.tanh(self.linear_layer("penultimate", outputs, config.penultimate_hidden_size))
-            penultimate = tf.nn.dropout(penultimate, self.keep_probability)
             softmax = self.linear_layer("softmax", penultimate, supertags_size)
 
         with tf.name_scope("prediction"):
@@ -281,7 +282,7 @@ class SupertaggerTask(object):
                 num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n))
         return (num_correct, num_total)
 
-    def train(self, model):
+    def train(self, model, run_name):
         logging.info("Starting training for {} epochs.".format(self.config.num_epochs))
 
         with tf.name_scope("training"):
@@ -294,7 +295,7 @@ class SupertaggerTask(object):
                                                         self.config.init_scale, seed=self.config.seed)
 
         with tf.Session() as session, tf.variable_scope("model", initializer=initializer), util.Timer("Training") as timer:
-            writer = tf.train.SummaryWriter("tensorboard_logs", graph_def=session.graph_def, flush_secs=60)
+            writer = tf.train.SummaryWriter(os.path.join(TENSORBOARD_LOGDIR, run_name), graph_def=session.graph_def, flush_secs=60)
 
             tf.initialize_all_variables().run()
 
@@ -362,18 +363,20 @@ class SupertaggerConfig(object):
                     self.embedding_spaces[name].embedding_size = size
 
 if __name__ == "__main__":
-    logging.basicConfig(filename="info.log",level=logging.INFO)
-    logging.getLogger().addHandler(logging.StreamHandler())
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="configuration json file")
     parser.add_argument("-d", "--debug", help="uses a smaller training set for debugging", action="store_true")
+    parser.add_argument("-r", "--run_name", help="named used to identify logs", default="default")
     parser.add_argument("-g", "--gpu", help="specify gpu devices to use")
     args = parser.parse_args()
+
+    logging.basicConfig(filename=(args.run_name + ".log"),level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler())
 
     if args.gpu is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     task = SupertaggerTask(args.config, args.debug)
     model = SupertaggerModel(task.config, args.gpu)
-    task.train(model)
+    task.train(model, args.run_name)
