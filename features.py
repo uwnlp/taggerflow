@@ -1,14 +1,14 @@
 import collections
 
 class FeatureSpace(object):
-    def __init__(self, sentences, min_count=None):
+    def __init__(self, sentences, min_count=None, append_unknown=True):
         counts = collections.Counter(self.extract(sentences))
         self.space = [f for f in counts if min_count is None or counts[f] >= min_count]
 
-        # Append extra index for unknown features.
-        num_known_features = len(self.space)
-        self.ispace = collections.defaultdict(lambda:num_known_features, {f:i for i,f in enumerate(self.space)})
-        self.space.append(None)
+        default_index = len(self.space) if append_unknown else -1
+        self.ispace = collections.defaultdict(lambda:default_index, {f:i for i,f in enumerate(self.space)})
+        if append_unknown:
+            self.space.append(None)
 
     def index(self, f):
         return self.ispace[f]
@@ -23,8 +23,8 @@ class FeatureSpace(object):
         raise NotImplementedError("Subclasses must implement this!")
 
 class SupertagSpace(FeatureSpace):
-    def __init__(self, sentences, min_count=None):
-        super(SupertagSpace, self).__init__(sentences, min_count)
+    def __init__(self, sentences, min_count=None, append_unknown=True):
+        super(SupertagSpace, self).__init__(sentences, min_count, append_unknown)
 
     def extract(self, sentences):
         for tokens, supertags in sentences:
@@ -32,8 +32,8 @@ class SupertagSpace(FeatureSpace):
                 yield s
 
 class EmbeddingSpace(FeatureSpace):
-    def __init__(self, sentences, min_count=None):
-        super(EmbeddingSpace, self).__init__(sentences, min_count)
+    def __init__(self, sentences, min_count=None, append_unknown=True):
+        super(EmbeddingSpace, self).__init__(sentences, min_count, append_unknown)
 
         # To be set by the configuration.
         self.embedding_size = None
@@ -85,17 +85,17 @@ class WordSpace(PretrainedEmbeddingSpace):
         return token.lower()
 
 class PrefixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n, min_count=None):
+    def __init__(self, sentences, n, min_count=None, append_unknown=True):
         self.n = n
-        super(PrefixSpace, self).__init__(sentences, min_count)
+        super(PrefixSpace, self).__init__(sentences, min_count, append_unknown)
 
     def extract_from_token(self, token):
         return token[:self.n]
 
 class SuffixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n, min_count=None):
+    def __init__(self, sentences, n, min_count=None, append_unknown=True):
         self.n = n
-        super(SuffixSpace, self).__init__(sentences, min_count)
+        super(SuffixSpace, self).__init__(sentences, min_count, append_unknown)
 
     def extract_from_token(self, token):
         return token[-self.n:]

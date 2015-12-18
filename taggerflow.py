@@ -26,7 +26,7 @@ class SupertaggerTask(object):
         logging.info("Train sentences: {}".format(len(train_sentences)))
         logging.info("Dev sentences: {}".format(len(dev_sentences)))
 
-        supertag_space = features.SupertagSpace(train_sentences)
+        supertag_space = features.SupertagSpace(train_sentences, min_count=10, append_unknown=False)
         embedding_spaces = collections.OrderedDict(
             [("words",    features.WordSpace(util.maybe_download("data",
                                                                  "http://appositive.cs.washington.edu/resources/",
@@ -66,14 +66,16 @@ class SupertaggerTask(object):
             batch_x = np.zeros([batch_size, self.config.max_tokens, len(self.config.embedding_spaces)], dtype=np.int32)
             batch_y = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
             batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
+            batch_mask = np.zeros([batch_size, self.config.max_tokens], dtype=np.float32)
             for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
                 if len(x) > self.config.max_tokens:
                     logging.info("Skipping sentence of length {}.".format(len(x)))
                     continue
-                batch_num_tokens[j] = len(x)
                 batch_x[j,:len(x):] = x
                 batch_y[j,:len(y)] = y
-            batches.append(([batch_x, batch_num_tokens], batch_y))
+                batch_num_tokens[j] = len(x)
+                batch_mask[j,:len(y)] = [y_val >= 0 for y_val in y]
+            batches.append((batch_x, batch_y, batch_num_tokens, batch_mask))
         return batches
 
     def train(self, run_name):
@@ -105,11 +107,12 @@ class SupertaggerTask(object):
                 for epoch in range(self.config.num_epochs):
                     logging.info("========= Epoch {:02d} =========".format(epoch))
                     train_loss = 0.0
-                    for i,((x,num_tokens),y) in enumerate(self.train_batches):
+                    for i,(x,y,num_tokens,mask) in enumerate(self.train_batches):
                         _, loss = session.run([optimize, train_model.loss], {
                             train_model.x: x,
                             train_model.y: y,
-                            train_model.num_tokens: num_tokens
+                            train_model.num_tokens: num_tokens,
+                            train_model.mask: mask,
                         })
                         train_loss += loss
                         if i % 10 == 0:

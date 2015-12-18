@@ -19,19 +19,17 @@ class SupertaggerEvaluationContext(util.ThreadedContext):
     def loop(self):
         time.sleep(120)
         with util.Timer("Dev evaluation"):
-            num_correct = 0
-            num_total = 0
-            for (x,num_tokens),y in self.data:
-                prediction = self.session.run(self.model.prediction, {
-                    self.model.x: x,
-                    self.model.num_tokens: num_tokens,
-                    self.model.keep_probability: 1.0
-                })
-                for i,n in enumerate(num_tokens):
-                    num_total += n
-                    num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n))
-
-            accuracy = (100.0 * num_correct)/num_total
+            if len(self.data) != 1:
+                raise ValueError("Evaluation data should be in a single batch")
+            x,y,num_tokens,mask = self.data[0]
+            num_correct, num_total = self.session.run([self.model.num_correct, self.model.num_total], {
+                self.model.x: x,
+                self.model.y: y,
+                self.model.num_tokens: num_tokens,
+                self.model.mask: mask,
+                self.model.keep_probability: 1.0
+            })
+            accuracy = (100.0 *  num_correct)/num_total
             self.writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Dev Accuracy", simple_value=accuracy)]),
                                     tf.train.global_step(self.session, self.global_step))
             logging.info("Dev accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))

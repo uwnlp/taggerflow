@@ -24,6 +24,7 @@ class SupertaggerModel(object):
             self.x = tf.placeholder(tf.int32, [batch_size, max_tokens, len(embedding_spaces)], name="x")
             self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
+            self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
             self.keep_probability = tf.constant(config.keep_probability, tf.float32, [], name="keep_probability")
 
         # From feature indexes to concatenated embeddings.
@@ -65,7 +66,9 @@ class SupertaggerModel(object):
 
         with tf.name_scope("prediction"):
             # Predictions are the indexes with the highest value from the softmax layer.
-            self.prediction = tf.argmax(softmax, 2)
+            self.prediction = tf.to_int32(tf.argmax(softmax, 2))
+            self.num_correct = tf.reduce_sum(tf.to_float(tf.equal(self.prediction, self.y)) * self.mask)
+            self.num_total = tf.reduce_sum(self.mask)
 
         with tf.name_scope("loss"):
             # Cross-entropy loss.
@@ -73,13 +76,8 @@ class SupertaggerModel(object):
 
             self.loss = seq2seq.sequence_loss([tf.reshape(softmax, [pseudo_batch_size, -1])],
                                               [tf.reshape(self.y, [pseudo_batch_size])],
-                                              [tf.ones([pseudo_batch_size])],
-                                              supertags_size,
-                                              average_across_timesteps=False,
-                                              average_across_batch=False)
-
-            # Only average across valid tokens rather than padding.
-            self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
+                                              [tf.reshape(self.mask, [pseudo_batch_size])],
+                                              supertags_size)
 
             # Add L2 regularization for all trainable parameters.
             self.params = tf.trainable_variables()
