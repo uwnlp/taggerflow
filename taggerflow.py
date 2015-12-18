@@ -61,14 +61,12 @@ class SupertaggerTask(object):
         data = [([self.get_embedding_indexes(t) for t in tokens], [self.config.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
 
         batch_size = self.config.batch_size
-
         batches = []
         num_batches = int(math.ceil(len(data)/float(batch_size)))
         for i in range(num_batches):
             batch_x = np.zeros([batch_size, self.config.max_tokens, len(self.config.embedding_spaces)], dtype=np.int32)
             batch_y = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
             batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
-            batch_mask = np.zeros([batch_size, self.config.max_tokens], dtype=np.float32)
             for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
                 if len(x) > self.config.max_tokens:
                     logging.info("Skipping sentence of length {}.".format(len(x)))
@@ -76,51 +74,48 @@ class SupertaggerTask(object):
                 batch_x[j,:len(x):] = x
                 batch_y[j,:len(y)] = y
                 batch_num_tokens[j] = len(x)
-                batch_mask[j,:len(y)] = [y_val >= 0 for y_val in y]
-            batches.append((batch_x, batch_y, batch_num_tokens, batch_mask))
+            batches.append((batch_x, batch_y, batch_num_tokens))
         return batches
 
     def train(self, model, run_name):
         with tf.name_scope("training"):
             global_step = tf.Variable(0, name="global_step", trainable=False)
-            params = tf.trainable_variables()
-            grads, _ = tf.clip_by_global_norm(tf.gradients(model.loss, params), self.config.max_grad_norm)
-            optimize = model.optimizer.apply_gradients(zip(grads, params), global_step=global_step)
+            grads, _ = tf.clip_by_global_norm(tf.gradients(model.cost, model.params), self.config.max_grad_norm)
+            optimize = model.optimizer.apply_gradients(zip(grads, model.params), global_step=global_step)
 
         with tf.name_scope("initialization"):
             initializer = tf.random_uniform_initializer(-self.config.init_scale,
                                                         self.config.init_scale, seed=self.config.seed)
 
         with tf.Session() as session, tf.variable_scope("model", initializer=initializer), util.Timer("Training") as timer:
-            writer = tf.train.SummaryWriter(os.path.join(self.logdir, run_name), graph_def=session.graph_def, flush_secs=60)
+            writer = tf.train.SummaryWriter(os.path.join(self.logdir, run_name), graph_def=session.graph_def, flush_secs=1)
 
             tf.initialize_all_variables().run()
 
             with util.Timer("Initializing model"):
-                train_model.initialize(session)
+                model.initialize(session)
 
             logging.info("Starting training for {} epochs.".format(self.config.num_epochs))
 
             with evaluation.SupertaggerEvaluationContext(session, self.dev_batches, model, global_step, writer):
                 for epoch in range(self.config.num_epochs):
                     logging.info("========= Epoch {:02d} =========".format(epoch))
-                    train_loss = 0.0
+                    train_cost = 0.0
                     for i,(x,y,num_tokens) in enumerate(self.train_batches):
-                        _, loss = session.run([optimize, model.loss], {
+                        _, cost = session.run([optimize, model.cost], {
                             model.x: x,
                             model.y: y,
                             model.num_tokens: num_tokens,
                             model.keep_probability: self.config.keep_probability
                         })
-                        train_loss += loss
+                        train_cost += cost
                         if i % 10 == 0:
-                            logging.info("{}/{} mean training loss: {:.3f}".format(i+1, len(self.train_batches), train_loss/(i+1)))
+                            logging.info("{}/{} steps taken.".format(i+1,len(self.train_batches)))
 
-                    train_loss = train_loss / len(self.train_batches)
-                    writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Loss", simple_value=train_loss)]),
+                    train_cost = train_cost / len(self.train_batches)
+                    writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Loss", simple_value=train_cost)]),
                                        tf.train.global_step(session, global_step))
-                    logging.info("Epoch mean training loss: {:.3f}".format(train_loss))
-
+                    logging.info("Epoch mean training cost: {:.3f}".format(train_cost))
                     timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
                     logging.info("============================")
 

@@ -82,10 +82,14 @@ class SupertaggerModel(object):
             # Only average across valid tokens rather than padding.
             self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
 
+            self.params = tf.trainable_variables()
             if self.config.regularize:
                 # Add L2 regularization for all trainable parameters.
-                self.params = tf.trainable_variables()
-                self.loss += 10e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
+                self.regularization = 10e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
+            else:
+                self.regularization = 0.0
+
+            self.cost = self.loss + self.regularization
 
         # Construct training operation.
         self.optimizer = tf.train.AdamOptimizer()
