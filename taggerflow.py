@@ -19,10 +19,10 @@ import util
 
 class SupertaggerTask(object):
 
-    def __init__(self, config_file, logdir, debug):
+    def __init__(self, config_file, logdir):
         self.logdir = logdir
 
-        train_sentences, dev_sentences, test_sentences = ccgbank.CCGBankReader().get_splits(debug)
+        train_sentences, dev_sentences, test_sentences = ccgbank.SupertagReader().get_splits()
         logging.info("Train sentences: {}".format(len(train_sentences)))
         logging.info("Dev sentences: {}".format(len(dev_sentences)))
 
@@ -30,7 +30,7 @@ class SupertaggerTask(object):
         embedding_spaces = collections.OrderedDict(
             [("words",    features.WordSpace(util.maybe_download("data",
                                                                  "http://appositive.cs.washington.edu/resources/",
-                                                                 "embeddings.raw"), debug)),
+                                                                 "embeddings.raw"))),
              ("prefix_1", features.PrefixSpace(train_sentences, 1, min_count=3)),
              ("prefix_2", features.PrefixSpace(train_sentences, 2, min_count=3)),
              ("prefix_3", features.PrefixSpace(train_sentences, 3, min_count=3)),
@@ -152,7 +152,6 @@ class SupertaggerConfig(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="configuration json file")
-    parser.add_argument("-d", "--debug", help="uses a smaller training set for debugging", action="store_true")
     parser.add_argument("-r", "--run_name", help="named used to identify logs", default="default")
     parser.add_argument("-g", "--gpu", help="specify gpu devices to use")
     parser.add_argument("-l", "--logdir", help="directory to contain logs", default="logs")
@@ -166,5 +165,5 @@ if __name__ == "__main__":
     if args.gpu is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    task = SupertaggerTask(args.config, args.logdir, args.debug)
+    task = SupertaggerTask(args.config, args.logdir)
     task.train(args.run_name)

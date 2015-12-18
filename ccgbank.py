@@ -13,11 +13,6 @@ class CCGBankReader(object):
     DEV_REGEX = re.compile(r".*wsj_00.*auto")
     TEST_REGEX = re.compile(r".*wsj_23.*auto")
 
-    # For debugging purposes only.
-    DEBUG_TRAIN_REGEX = re.compile(r".*wsj_0101.*auto")
-    DEBUG_DEV_REGEX = re.compile(r".*wsj_0001.*auto")
-    DEBUG_TEST_REGEX = re.compile(r".*wsj_2301.*auto")
-
     def __init__(self, supertags_only=True):
         self.ccgparse = Forward()
         supertag = Word(printables, excludeChars="<>")
@@ -47,7 +42,7 @@ class CCGBankReader(object):
             if line.startswith("("):
                 yield zip(*self.ccgparse.parseString(line).asList())
 
-    def get_splits(self, debug=False):
+    def get_splits(self):
         filepath = util.maybe_download("data",
                                        "http://appositive.cs.washington.edu/resources/",
                                        "LDC2005T13.tgz")
@@ -55,15 +50,23 @@ class CCGBankReader(object):
         train = []
         dev = []
         test = []
-        train_regex = self.DEBUG_TRAIN_REGEX if debug else self.TRAIN_REGEX
-        dev_regex = self.DEBUG_DEV_REGEX if debug else self.DEV_REGEX
-        test_regex = self.DEBUG_TEST_REGEX if debug else self.TEST_REGEX
         with tarfile.open(filepath, "r:gz") as tar:
             for member in tar:
-                if train_regex.match(member.name):
+                if self.TRAIN_REGEX.match(member.name):
                     train.extend(self.get_sentences(tar, member))
-                elif dev_regex.match(member.name):
+                elif self.DEV_REGEX.match(member.name):
                     dev.extend(self.get_sentences(tar, member))
-                elif test_regex.match(member.name):
+                elif self.TEST_REGEX.match(member.name):
                     test.extend(self.get_sentences(tar, member))
         return (train, dev, test)
+
+class SupertagReader(object):
+
+    def get_sentences(self, filepath):
+        with open(filepath) as f:
+            return [zip(*[(word.strip(),supertag.strip()) for word,pos,supertag in (split.split("|") for split in line.split(" "))]) for line in f.readlines()]
+
+    def get_splits(self):
+        return [self.get_sentences(util.maybe_download("data",
+                                                       "http://appositive.cs.washington.edu/resources/",
+                                                       split_name + ".stagged")) for split_name in ("train", "dev", "test")]
