@@ -85,7 +85,7 @@ class SupertaggerModel(object):
             self.params = tf.trainable_variables()
             if self.config.regularize:
                 # Add L2 regularization for all trainable parameters.
-                self.regularization = 10e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
+                self.regularization = 1e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
             else:
                 self.regularization = 0.0
 

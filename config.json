@@ -5,7 +5,7 @@
     "num_layers": 2,
     "max_grad_norm": 10.0,
     "num_epochs": 10000,
-    "regularize" : false,
+    "regularize" : true,
     "max_tokens": 100,
     "batch_size": 512,
     "keep_probability": 0.5,

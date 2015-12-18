@@ -101,21 +101,27 @@ class SupertaggerTask(object):
                 for epoch in range(self.config.num_epochs):
                     logging.info("========= Epoch {:02d} =========".format(epoch))
                     train_cost = 0.0
+                    train_reg = 0.0
                     for i,(x,y,num_tokens) in enumerate(self.train_batches):
-                        _, cost = session.run([optimize, model.cost], {
+                        _, cost, reg = session.run([optimize, model.cost, model.regularization], {
                             model.x: x,
                             model.y: y,
                             model.num_tokens: num_tokens,
                             model.keep_probability: self.config.keep_probability
                         })
                         train_cost += cost
+                        train_reg += reg
                         if i % 10 == 0:
                             logging.info("{}/{} steps taken.".format(i+1,len(self.train_batches)))
 
                     train_cost = train_cost / len(self.train_batches)
+                    train_reg = train_reg / len(self.train_batches)
                     writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Loss", simple_value=train_cost)]),
                                        tf.train.global_step(session, global_step))
+                    writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Regularization", simple_value=train_reg)]),
+                                       tf.train.global_step(session, global_step))
                     logging.info("Epoch mean training cost: {:.3f}".format(train_cost))
+                    logging.info("Epoch mean training regularization: {:.3f}".format(train_reg))
                     timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
                     logging.info("============================")
 
