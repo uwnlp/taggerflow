@@ -1,14 +1,14 @@
 import collections
 
 class FeatureSpace(object):
-    def __init__(self, sentences, min_count=None, append_unknown=True):
+    def __init__(self, sentences, min_count=None):
         counts = collections.Counter(self.extract(sentences))
         self.space = [f for f in counts if min_count is None or counts[f] >= min_count]
 
-        default_index = len(self.space) if append_unknown else -1
+        # Append default index for unknown words.
+        default_index = len(self.space)
         self.ispace = collections.defaultdict(lambda:default_index, {f:i for i,f in enumerate(self.space)})
-        if append_unknown:
-            self.space.append(None)
+        self.space.append(None)
 
     def index(self, f):
         return self.ispace[f]
@@ -23,8 +23,8 @@ class FeatureSpace(object):
         raise NotImplementedError("Subclasses must implement this!")
 
 class SupertagSpace(FeatureSpace):
-    def __init__(self, sentences, min_count=None, append_unknown=True):
-        super(SupertagSpace, self).__init__(sentences, min_count, append_unknown)
+    def __init__(self, sentences, min_count=None):
+        super(SupertagSpace, self).__init__(sentences, min_count)
 
     def extract(self, sentences):
         for tokens, supertags in sentences:
@@ -32,8 +32,8 @@ class SupertagSpace(FeatureSpace):
                 yield s
 
 class EmbeddingSpace(FeatureSpace):
-    def __init__(self, sentences, min_count=None, append_unknown=True):
-        super(EmbeddingSpace, self).__init__(sentences, min_count, append_unknown)
+    def __init__(self, sentences, min_count=None):
+        super(EmbeddingSpace, self).__init__(sentences, min_count)
 
         # To be set by the configuration.
         self.embedding_size = None
@@ -47,16 +47,13 @@ class EmbeddingSpace(FeatureSpace):
         raise NotImplementedError("Subclasses must implement this!")
 
 class PretrainedEmbeddingSpace(EmbeddingSpace):
-    def __init__(self, embeddings_file, debug=False):
+    def __init__(self, embeddings_file):
         already_added = set()
         self.embedding_size = None
         self.space = []
         self.embeddings = []
         with open(embeddings_file) as f:
             for i,line in enumerate(f.readlines()):
-                if debug and i > 10:
-                    break
-
                 splits = line.split()
                 word = splits[0].lower()
 
@@ -64,7 +61,6 @@ class PretrainedEmbeddingSpace(EmbeddingSpace):
                     raise ValueError("First embedding in the file should represent the unknown word.")
                 if word not in already_added:
                     embedding = [float(s) for s in splits[1:]]
-
                     if self.embedding_size is None:
                         self.embedding_size = len(embedding)
                     elif self.embedding_size != len(embedding):
@@ -78,24 +74,24 @@ class PretrainedEmbeddingSpace(EmbeddingSpace):
         self.ispace = collections.defaultdict(lambda:0, {f:i for i,f in enumerate(self.space)})
 
 class WordSpace(PretrainedEmbeddingSpace):
-    def __init__(self, embeddings_file, debug=False):
-        super(WordSpace, self).__init__(embeddings_file, debug)
+    def __init__(self, embeddings_file):
+        super(WordSpace, self).__init__(embeddings_file)
 
     def extract_from_token(self, token):
         return token.lower()
 
 class PrefixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n, min_count=None, append_unknown=True):
+    def __init__(self, sentences, n, min_count=None):
         self.n = n
-        super(PrefixSpace, self).__init__(sentences, min_count, append_unknown)
+        super(PrefixSpace, self).__init__(sentences, min_count)
 
     def extract_from_token(self, token):
         return token[:self.n]
 
 class SuffixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n, min_count=None, append_unknown=True):
+    def __init__(self, sentences, n, min_count=None):
         self.n = n
-        super(SuffixSpace, self).__init__(sentences, min_count, append_unknown)
+        super(SuffixSpace, self).__init__(sentences, min_count)
 
     def extract_from_token(self, token):
         return token[-self.n:]

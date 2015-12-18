@@ -5,10 +5,9 @@
     "num_layers": 2,
     "max_grad_norm": 10.0,
     "num_epochs": 10000,
-    "learning_rate": 0.1,
-    "momentum": 0.7,
+    "regularize" : false,
     "max_tokens": 100,
-    "batch_size": 1024,
+    "batch_size": 512,
     "keep_probability": 0.5,
     "embedding_sizes": {
         "prefix_1" : 32,

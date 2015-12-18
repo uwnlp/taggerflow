@@ -11,10 +11,11 @@ import features
 
 class SupertaggerModel(object):
 
-    def __init__(self, config, batch_size):
+    def __init__(self, config):
         self.config = config
 
         # Redeclare some configuration settings for convenience.
+        batch_size = config.batch_size
         supertags_size = config.supertag_space.size()
         embedding_spaces = config.embedding_spaces
         max_tokens = config.max_tokens
@@ -24,8 +25,7 @@ class SupertaggerModel(object):
             self.x = tf.placeholder(tf.int32, [batch_size, max_tokens, len(embedding_spaces)], name="x")
             self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
-            self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
-            self.keep_probability = tf.constant(config.keep_probability, tf.float32, [], name="keep_probability")
+            self.keep_probability = tf.placeholder(tf.float32, [], name="keep_probability")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"), tf.device("/cpu:0"):
@@ -66,9 +66,7 @@ class SupertaggerModel(object):
 
         with tf.name_scope("prediction"):
             # Predictions are the indexes with the highest value from the softmax layer.
-            self.prediction = tf.to_int32(tf.argmax(softmax, 2))
-            self.num_correct = tf.reduce_sum(tf.to_float(tf.equal(self.prediction, self.y)) * self.mask)
-            self.num_total = tf.reduce_sum(self.mask)
+            self.prediction = tf.argmax(softmax, 2)
 
         with tf.name_scope("loss"):
             # Cross-entropy loss.
@@ -76,12 +74,18 @@ class SupertaggerModel(object):
 
             self.loss = seq2seq.sequence_loss([tf.reshape(softmax, [pseudo_batch_size, -1])],
                                               [tf.reshape(self.y, [pseudo_batch_size])],
-                                              [tf.reshape(self.mask, [pseudo_batch_size])],
-                                              supertags_size)
+                                              [tf.ones([pseudo_batch_size])],
+                                              supertags_size,
+                                              average_across_timesteps=False,
+                                              average_across_batch=False)
 
-            # Add L2 regularization for all trainable parameters.
-            self.params = tf.trainable_variables()
-            self.loss += 10e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
+            # Only average across valid tokens rather than padding.
+            self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
+
+            if self.config.regularize:
+                # Add L2 regularization for all trainable parameters.
+                self.params = tf.trainable_variables()
+                self.loss += 10e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
 
         # Construct training operation.
         self.optimizer = tf.train.AdamOptimizer()
