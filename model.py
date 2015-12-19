@@ -76,13 +76,8 @@ class SupertaggerModel(object):
             self.loss = seq2seq.sequence_loss([tf.reshape(softmax, [pseudo_batch_size, -1])],
                                               [tf.reshape(self.y, [pseudo_batch_size])],
                                               [tf.reshape(self.mask, [pseudo_batch_size])],
-                                              #[tf.ones([pseudo_batch_size])],
                                               supertags_size,
-                                              average_across_timesteps=False,
-                                              average_across_batch=False)
-
-            # Only average across valid tokens rather than padding.
-            self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
+                                              average_across_timesteps=False)
 
             params = tf.trainable_variables()
             if self.config.regularize:
