@@ -39,35 +39,60 @@ class SupertaggerData(object):
         for name, space in self.embedding_spaces.items():
             logging.info("Number of {}: {}".format(name, space.size()))
 
-        logging.info("Massaging data into mini-batch format...")
+        logging.info("Massaging data into training format...")
 
-        self.train_batches = self.get_batches(train_sentences)
-        self.dev_batches = self.get_batches(dev_sentences)
+        self.train_data = self.get_data(train_sentences)
+        self.dev_data = self.get_data(dev_sentences)
 
-        logging.info("Train batches: {}".format(len(self.train_batches)))
-        logging.info("Dev batches: {}".format(len(self.dev_batches)))
+        logging.info("Train batches: {}".format(self.train_data[0].shape[0] / self.batch_size))
+        logging.info("Dev batches: {}".format(self.dev_data[0].shape[0] / self.batch_size))
 
     def get_embedding_indexes(self, token):
         return [space.index(space.extract_from_token(token)) for space in self.embedding_spaces.values()]
 
-    def get_batches(self, sentences):
-        data = [([self.get_embedding_indexes(t) for t in tokens], [self.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
+    def get_train_batches(self):
+        return self.get_batches(self.train_data)
 
+    def get_dev_batches(self):
+        return self.get_batches(self.dev_data)
+
+    def get_batches(self, data):
+        data_x, data_y, data_num_tokens, data_mask = data
         batch_size = self.batch_size
+        data_size = data_x.shape[0]
+        if data_size % batch_size != 0:
+            raise ValueError("The data size should be divisible by the batch size.")
+
+        indexes = np.arange(data_size)
+        np.random.shuffle(indexes)
         batches = []
-        num_batches = int(math.ceil(len(data)/float(batch_size)))
-        for i in range(num_batches):
-            batch_x = np.zeros([batch_size, self.max_tokens, len(self.embedding_spaces)], dtype=np.int32)
-            batch_y = np.zeros([batch_size, self.max_tokens], dtype=np.int32)
-            batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
-            batch_mask = np.zeros([batch_size, self.max_tokens], dtype=np.float32)
-            for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
-                if len(x) > self.max_tokens:
-                    logging.info("Skipping sentence of length {}.".format(len(x)))
-                    continue
-                batch_x[j,:len(x):] = x
-                batch_y[j,:len(y)] = y
-                batch_num_tokens[j] = len(x)
-                batch_mask[j,:len(y)] = y >= 0
-            batches.append((batch_x, batch_y, batch_num_tokens, batch_mask))
+        for i in range(data_size / batch_size):
+            batch_indexes = indexes[i * batch_size: (i + 1) * batch_size]
+            batches.append((data_x[batch_indexes,:,:],
+                            data_y[batch_indexes,:],
+                            data_num_tokens[batch_indexes],
+                            data_mask[batch_indexes,:]))
         return batches
+
+    def get_data(self, sentences):
+        sentences = [([self.get_embedding_indexes(t) for t in tokens], [self.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
+
+        # Make the data size divisible by the batch size.
+        data_size = int(self.batch_size * math.ceil(len(sentences)/float(self.batch_size)))
+        data_x = np.zeros([data_size, self.max_tokens, len(self.embedding_spaces)], dtype=np.int32)
+        data_y = np.zeros([data_size, self.max_tokens], dtype=np.int32)
+        data_num_tokens = np.zeros([data_size], dtype=np.int64)
+        data_mask = np.zeros([data_size, self.max_tokens], dtype=np.float32)
+
+        for i,(x,y) in enumerate(sentences):
+            if len(x) != len(y):
+                raise ValueError("Number of tokens should match number of supertags.")
+            if len(x) > self.max_tokens:
+                logging.info("Skipping sentence of length {}.".format(len(x)))
+                continue
+            data_x[i,:len(x):] = x
+            data_y[i,:len(y)] = y
+            data_num_tokens[i] = len(x)
+            data_mask[i,:len(y)] = y >= 0
+
+        return (data_x, data_y, data_num_tokens, data_mask)
