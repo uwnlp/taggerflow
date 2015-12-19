@@ -8,7 +8,7 @@
     "regularize" : true,
     "max_tokens": 100,
     "batch_size": 512,
-    "keep_probability": 0.5,
+    "keep_probability": 0.9,
     "embedding_sizes": {
         "prefix_1" : 32,
         "prefix_2" : 32,
