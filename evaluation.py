@@ -29,7 +29,7 @@ class SupertaggerEvaluationContext(util.ThreadedContext):
         with util.Timer("Dev evaluation"):
             num_correct = 0
             num_total = 0
-            for x,y,num_tokens in self.data:
+            for x,y,num_tokens,mask in self.data:
                 prediction = self.session.run(self.model.prediction, {
                     self.model.x: x,
                     self.model.num_tokens: num_tokens,

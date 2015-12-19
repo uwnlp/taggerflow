@@ -67,6 +67,7 @@ class SupertaggerTask(object):
             batch_x = np.zeros([batch_size, self.config.max_tokens, len(self.config.embedding_spaces)], dtype=np.int32)
             batch_y = np.zeros([batch_size, self.config.max_tokens], dtype=np.int32)
             batch_num_tokens = np.zeros([batch_size], dtype=np.int64)
+            batch_mask = np.zeros([batch_size, self.config.max_tokens], dtype=np.float32)
             for j,(x,y) in enumerate(data[i * batch_size: (i + 1) * batch_size]):
                 if len(x) > self.config.max_tokens:
                     logging.info("Skipping sentence of length {}.".format(len(x)))
@@ -74,7 +75,8 @@ class SupertaggerTask(object):
                 batch_x[j,:len(x):] = x
                 batch_y[j,:len(y)] = y
                 batch_num_tokens[j] = len(x)
-            batches.append((batch_x, batch_y, batch_num_tokens))
+                batch_mask[j,:len(y)] = np.ones_like(y)
+            batches.append((batch_x, batch_y, batch_num_tokens, batch_mask))
         return batches
 
     def train(self, model, run_name):
@@ -101,13 +103,14 @@ class SupertaggerTask(object):
                     logging.info("========= Epoch {:02d} =========".format(epoch))
                     train_cost = 0.0
                     train_reg = 0.0
-                    for i,(x,y,num_tokens) in enumerate(self.train_batches):
+                    for i,(x,y,num_tokens,mask) in enumerate(self.train_batches):
                         if eval_context.stop:
                             break
                         _, cost, reg = session.run([optimize, model.cost, model.regularization], {
                             model.x: x,
                             model.y: y,
                             model.num_tokens: num_tokens,
+                            model.mask: mask,
                             model.keep_probability: self.config.keep_probability
                         })
                         train_cost += cost

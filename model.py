@@ -25,6 +25,7 @@ class SupertaggerModel(object):
             self.x = tf.placeholder(tf.int32, [batch_size, max_tokens, len(embedding_spaces)], name="x")
             self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
+            self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
             self.keep_probability = tf.placeholder(tf.float32, [], name="keep_probability")
 
         # From feature indexes to concatenated embeddings.
@@ -74,7 +75,8 @@ class SupertaggerModel(object):
 
             self.loss = seq2seq.sequence_loss([tf.reshape(softmax, [pseudo_batch_size, -1])],
                                               [tf.reshape(self.y, [pseudo_batch_size])],
-                                              [tf.ones([pseudo_batch_size])],
+                                              [tf.reshape(self.mask, [pseudo_batch_size])],
+                                              #[tf.ones([pseudo_batch_size])],
                                               supertags_size,
                                               average_across_timesteps=False,
                                               average_across_batch=False)
