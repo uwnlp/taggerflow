@@ -11,14 +11,14 @@ import features
 
 class SupertaggerModel(object):
 
-    def __init__(self, config):
+    def __init__(self, config, data):
         self.config = config
 
-        # Redeclare some configuration settings for convenience.
-        batch_size = config.batch_size
-        supertags_size = config.supertag_space.size()
-        embedding_spaces = config.embedding_spaces
-        max_tokens = config.max_tokens
+        # Redeclare some variables for convenience.
+        batch_size = data.batch_size
+        supertags_size = data.supertag_space.size()
+        embedding_spaces = data.embedding_spaces
+        max_tokens = data.max_tokens
 
         with tf.name_scope("inputs"):
             # Each training step is batched with a maximum length.
@@ -26,14 +26,14 @@ class SupertaggerModel(object):
             self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
             self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
-            self.keep_probability = tf.placeholder(tf.float32, [], name="keep_probability")
+            self.dropout_probability = tf.placeholder(tf.float32, [], name="dropout_probability")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"), tf.device("/cpu:0"):
-            self.embeddings_w = collections.OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items() )
-            embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(self.embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
+            embeddings_w = collections.OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
+            embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(2, embeddings)
-            concat_embedding = tf.nn.dropout(concat_embedding, self.keep_probability)
+            concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - self.dropout_probability)
 
         with tf.name_scope("lstm"):
             # Split into LSTM inputs.
@@ -84,17 +84,29 @@ class SupertaggerModel(object):
             # Only average across valid tokens rather than padding.
             self.loss = self.loss / tf.cast(tf.reduce_sum(self.num_tokens), tf.float32)
 
-            self.params = tf.trainable_variables()
+            params = tf.trainable_variables()
             if self.config.regularize:
                 # Add L2 regularization for all trainable parameters.
-                self.regularization = 1e-6 * sum(tf.nn.l2_loss(p) for p in self.params)
+                self.regularization = 1e-6 * sum(tf.nn.l2_loss(p) for p in params)
             else:
                 self.regularization = 0.0
 
             self.cost = self.loss + self.regularization
 
-        # Construct training operation.
-        self.optimizer = tf.train.AdamOptimizer()
+        # Construct training operations.
+        with tf.name_scope("training"):
+            optimizer = tf.train.AdamOptimizer()
+            grads = tf.gradients(self.cost, params)
+            grads, _ = tf.clip_by_global_norm(grads, config.max_grad_norm)
+            self.global_step = tf.Variable(0, name="global_step", trainable=False)
+            self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
+
+        with tf.name_scope("initialization"):
+            self.initializer = tf.random_uniform_initializer(-self.config.init_scale,
+                                                             self.config.init_scale, seed=self.config.seed)
+            self.initialize = tf.tuple(
+                [tf.assign(embeddings_w[name], space.embeddings) for name,space in data.embedding_spaces.items()
+                 if isinstance(space, features.PretrainedEmbeddingSpace)])
 
     # xs contains (batch, timestep, x)
     # Performs y = xw + b.
@@ -106,8 +118,3 @@ class SupertaggerModel(object):
         flattened_xs = tf.reshape(xs, [-1, xs_dims[2]])
         ys = tf.nn.xw_plus_b(flattened_xs, w, b)
         return tf.reshape(ys, [xs_dims[0], xs_dims[1], y_dim])
-
-    def initialize(self, session):
-        for name, space in self.config.embedding_spaces.items():
-            if isinstance(space, features.PretrainedEmbeddingSpace):
-                session.run(tf.assign(self.embeddings_w[name], space.embeddings))

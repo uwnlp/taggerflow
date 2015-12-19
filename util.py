@@ -10,13 +10,13 @@ def maybe_download(data_dir, source_url, filename):
         os.mkdir(data_dir)
     filepath = os.path.join(data_dir, filename)
     if os.path.exists(filepath):
-        print("Using cached version of {}.".format(filepath))
+        logging.info("Using cached version of {}.".format(filepath))
     else:
         file_url = source_url + filename
-        print("Downloading {}...".format(file_url))
+        logging.info("Downloading {}...".format(file_url))
         filepath, _ = urllib.urlretrieve(file_url, filepath)
         statinfo = os.stat(filepath)
-        print("Succesfully downloaded {} ({} bytes).".format(file_url, statinfo.st_size))
+        logging.info("Succesfully downloaded {} ({} bytes).".format(file_url, statinfo.st_size))
     return filepath
 
 class Timer:
@@ -59,3 +59,13 @@ class ThreadedContext(object):
 
     def loop(self):
         raise NotImplementedError("Subclasses must implement this!")
+
+class LoggingToFile(object):
+    def __init__(self, logdir, filename):
+        self.handler = logging.FileHandler(os.path.join(logdir, filename))
+
+    def __enter__(self):
+        logging.getLogger().addHandler(self.handler)
+
+    def __exit__(self, *args):
+        logging.getLogger().removeHandler(self.handler)
