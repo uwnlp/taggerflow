@@ -13,6 +13,14 @@ class SupertaggerConfig(object):
         self.regularize = hyperparams["regularize"]
         self.dropout_probability = hyperparams["dropout_probability"]
 
+        shortened_hyperparams = { self.shorten(k):v for k,v in hyperparams.items() }
+        if len(shortened_hyperparams) != len(hyperparams):
+            raise ValueError("Shortened hyperparameter names not unique. Please rename them.")
+        self.name = "-".join("{}_{}".format(k,v) for k,v in shortened_hyperparams.items())
+
+    def shorten(self, name):
+        return "".join(split[0] for split in name.split("_"))
+
 def expand_grid(grid_file):
     # The grid is a json dictionary of lists of hyperparameters.
     with open(grid_file) as f:

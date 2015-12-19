@@ -12,8 +12,8 @@ from config import *
 
 class SupertaggerTrainer(object):
 
-    def __init__(self, logdir, run_name):
-        self.writer = tf.train.SummaryWriter(os.path.join(logdir, run_name), flush_secs=20)
+    def __init__(self, logdir):
+        self.writer = tf.train.SummaryWriter(logdir, flush_secs=20)
 
     def train(self, model, data):
         with tf.Session() as session, tf.variable_scope("model", initializer=model.initializer), Timer("Training") as timer:
@@ -50,6 +50,6 @@ class SupertaggerTrainer(object):
                                             tf.train.global_step(session, model.global_step))
                     logging.info("Epoch mean training cost: {:.3f}".format(train_cost))
                     logging.info("Epoch mean training regularization: {:.3f}".format(train_reg))
-                    timer.tick("Epoch {}".format(epoch + 1))
+                    timer.tick("Epoch {}".format(epoch))
                     epoch += 1
                     logging.info("============================")

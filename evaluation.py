@@ -11,8 +11,8 @@ from util import *
 # Evaluate every 2 minutes.
 EVAL_FREQUENCY = 2
 
-# Allow the model 30 minutes to improve.
-GRACE_PERIOD = 30
+# Allow the model 10 chances and about 20 minutes to improve.
+GRACE_PERIOD = 20
 
 class SupertaggerEvaluationContext(ThreadedContext):
     def __init__(self, session, data, model, writer):
@@ -39,8 +39,10 @@ class SupertaggerEvaluationContext(ThreadedContext):
                     num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n) if y[i,j] >= 0)
                 num_total += np.sum(mask)
             accuracy = (100.0 * num_correct)/num_total
+            global_step = tf.train.global_step(self.session, self.model.global_step)
 
         logging.info("----------------------------")
+        logging.info("Evaluating at step {}.".format(global_step))
         logging.info("Dev accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
 
         if accuracy > self.best_accuracy:
@@ -58,4 +60,4 @@ class SupertaggerEvaluationContext(ThreadedContext):
 
         summary_values = [tf.Summary.Value(tag="Dev Accuracy", simple_value=accuracy),
                           tf.Summary.Value(tag="Max Dev Accuracy", simple_value=self.best_accuracy)]
-        self.writer.add_summary(tf.Summary(value=summary_values), tf.train.global_step(self.session, self.model.global_step))
+        self.writer.add_summary(tf.Summary(value=summary_values), global_step)
