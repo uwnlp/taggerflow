@@ -45,9 +45,9 @@ class SupertaggerTrainer(object):
                     train_cost = train_cost / len(data.train_batches)
                     train_reg = train_reg / len(data.train_batches)
                     self.writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Cost", simple_value=train_cost)]),
-                                            tf.train.global_step(session, global_step))
+                                            tf.train.global_step(session, model.global_step))
                     self.writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Regularization", simple_value=train_reg)]),
-                                            tf.train.global_step(session, global_step))
+                                            tf.train.global_step(session, model.global_step))
                     logging.info("Epoch mean training cost: {:.3f}".format(train_cost))
                     logging.info("Epoch mean training regularization: {:.3f}".format(train_reg))
                     timer.tick("Epoch {}".format(epoch + 1))
