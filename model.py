@@ -36,15 +36,13 @@ class SupertaggerModel(object):
             concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - self.dropout_probability)
 
         with tf.name_scope("lstm"):
+            # LSTM cell is replicated across stacks and timesteps.
+            lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value)
+            cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
+
             # Split into LSTM inputs.
             inputs = tf.split(1, max_tokens, concat_embedding)
             inputs = [tf.squeeze(i, [1]) for i in inputs]
-
-            cell_state_size = concat_embedding.get_shape()[2].value
-
-            # LSTM cell is replicated across stacks and timesteps.
-            lstm_cell = rnn_cell.BasicLSTMCell(cell_state_size)
-            cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
 
             # Both LSTMs have their own initial state.
             initial_state_fw = tf.get_variable("initial_state_fw", [1, cell.state_size])
