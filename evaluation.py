@@ -3,6 +3,7 @@
 import time
 import logging
 
+import numpy as np
 import tensorflow as tf
 
 import util
@@ -36,8 +37,8 @@ class SupertaggerEvaluationContext(util.ThreadedContext):
                     self.model.keep_probability: 1.0
                 })
                 for i,n in enumerate(num_tokens):
-                    num_total += n
-                    num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n))
+                    num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n) if y[i,j] >= 0)
+                num_total += np.sum(mask)
             accuracy = (100.0 * num_correct)/num_total
 
         self.writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Dev Accuracy", simple_value=accuracy)]),

@@ -26,7 +26,7 @@ class SupertaggerTask(object):
         logging.info("Train sentences: {}".format(len(train_sentences)))
         logging.info("Dev sentences: {}".format(len(dev_sentences)))
 
-        supertag_space = features.SupertagSpace(train_sentences)
+        supertag_space = features.SupertagSpace(train_sentences, min_count=10)
         embedding_spaces = collections.OrderedDict(
             [("words",    features.WordSpace(util.maybe_download("data",
                                                                  "http://appositive.cs.washington.edu/resources/",
@@ -75,7 +75,7 @@ class SupertaggerTask(object):
                 batch_x[j,:len(x):] = x
                 batch_y[j,:len(y)] = y
                 batch_num_tokens[j] = len(x)
-                batch_mask[j,:len(y)] = np.ones_like(y)
+                batch_mask[j,:len(y)] = y >= 0
             batches.append((batch_x, batch_y, batch_num_tokens, batch_mask))
         return batches
 
