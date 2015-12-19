@@ -88,21 +88,22 @@ class SupertaggerTask(object):
                                                         self.config.init_scale, seed=self.config.seed)
 
         with tf.Session() as session, tf.variable_scope("model", initializer=initializer), util.Timer("Training") as timer:
-            writer = tf.train.SummaryWriter(os.path.join(self.logdir, run_name), graph_def=session.graph_def, flush_secs=1)
+            writer = tf.train.SummaryWriter(os.path.join(self.logdir, run_name), flush_secs=20)
 
             tf.initialize_all_variables().run()
 
             with util.Timer("Initializing model"):
                 model.initialize(session)
 
-            logging.info("Starting training for {} epochs.".format(self.config.num_epochs))
-
-            with evaluation.SupertaggerEvaluationContext(session, self.dev_batches, model, global_step, writer):
-                for epoch in range(self.config.num_epochs):
+            with evaluation.SupertaggerEvaluationContext(session, self.dev_batches, model, global_step, writer) as eval_context:
+                epoch = 0
+                while not eval_context.stop:
                     logging.info("========= Epoch {:02d} =========".format(epoch))
                     train_cost = 0.0
                     train_reg = 0.0
                     for i,(x,y,num_tokens) in enumerate(self.train_batches):
+                        if eval_context.stop:
+                            break
                         _, cost, reg = session.run([optimize, model.cost, model.regularization], {
                             model.x: x,
                             model.y: y,
@@ -112,7 +113,7 @@ class SupertaggerTask(object):
                         train_cost += cost
                         train_reg += reg
                         if i % 10 == 0:
-                            logging.info("{}/{} steps taken.".format(i+1,len(self.train_batches)))
+                            logging.info("{}/{} training steps taken.".format(i+1,len(self.train_batches)))
 
                     train_cost = train_cost / len(self.train_batches)
                     train_reg = train_reg / len(self.train_batches)
@@ -122,7 +123,8 @@ class SupertaggerTask(object):
                                        tf.train.global_step(session, global_step))
                     logging.info("Epoch mean training cost: {:.3f}".format(train_cost))
                     logging.info("Epoch mean training regularization: {:.3f}".format(train_reg))
-                    timer.tick("{}/{} epochs".format(epoch + 1, self.config.num_epochs))
+                    timer.tick("Epoch {}".format(epoch + 1))
+                    epoch += 1
                     logging.info("============================")
 
 class SupertaggerConfig(object):
@@ -138,14 +140,10 @@ class SupertaggerConfig(object):
             self.penultimate_hidden_size = config["penultimate_hidden_size"]
             self.num_layers = config["num_layers"]
             self.max_grad_norm = config["max_grad_norm"]
-            self.num_epochs = config["num_epochs"]
             self.regularize = config["regularize"]
             self.max_tokens = config["max_tokens"]
             self.batch_size = config["batch_size"]
             self.keep_probability = config["keep_probability"]
-            for name,size in config["embedding_sizes"].items():
-                if self.embedding_spaces[name].embedding_size is None:
-                    self.embedding_spaces[name].embedding_size = size
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -34,9 +34,7 @@ class SupertagSpace(FeatureSpace):
 class EmbeddingSpace(FeatureSpace):
     def __init__(self, sentences, min_count=None):
         super(EmbeddingSpace, self).__init__(sentences, min_count)
-
-        # To be set by the configuration.
-        self.embedding_size = None
+        self.embedding_size = self.get_embedding_size()
 
     def extract(self, sentences):
         for tokens, supertags in sentences:
@@ -44,6 +42,9 @@ class EmbeddingSpace(FeatureSpace):
                 yield self.extract_from_token(t)
 
     def extract_from_token(self, token):
+        raise NotImplementedError("Subclasses must implement this!")
+
+    def get_embedding_size(self):
         raise NotImplementedError("Subclasses must implement this!")
 
 class PretrainedEmbeddingSpace(EmbeddingSpace):
@@ -88,6 +89,9 @@ class PrefixSpace(EmbeddingSpace):
     def extract_from_token(self, token):
         return token[:self.n]
 
+    def get_embedding_size(self):
+        return 32
+
 class SuffixSpace(EmbeddingSpace):
     def __init__(self, sentences, n, min_count=None):
         self.n = n
@@ -95,3 +99,6 @@ class SuffixSpace(EmbeddingSpace):
 
     def extract_from_token(self, token):
         return token[-self.n:]
+
+    def get_embedding_size(self):
+        return 32

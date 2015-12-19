@@ -3,6 +3,7 @@ import time
 import urllib
 import logging
 import threading
+import datetime
 
 def maybe_download(data_dir, source_url, filename):
     if not os.path.exists(data_dir):
@@ -29,11 +30,14 @@ class Timer:
 
     def __exit__(self, *args):
         if self.name is not None:
-            logging.info("{} took {:.3f} seconds.".format(self.name, time.time() - self.start))
+            logging.info("{} duration was {}.".format(self.name, self.readable(time.time() - self.start)))
+
+    def readable(self, seconds):
+        return str(datetime.timedelta(seconds=int(seconds)))
 
     def tick(self, message):
         current = time.time()
-        logging.info("{} took {:.3f} seconds ({:.3f} seconds since last tick).".format(message, current - self.start, current - self.last_tick))
+        logging.info("{} took {} ({} since last tick).".format(message, self.readable(current - self.start), self.readable(current - self.last_tick)))
         self.last_tick = current
 
 class ThreadedContext(object):
