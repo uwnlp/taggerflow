@@ -37,6 +37,7 @@ class SupertaggerTrainer(object):
                             model.y: y,
                             model.num_tokens: num_tokens,
                             model.mask: mask,
+                            model.input_dropout_probability: model.config.input_dropout_probability,
                             model.dropout_probability: model.config.dropout_probability
                         })
                         train_cost += cost

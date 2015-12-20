@@ -26,6 +26,7 @@ class SupertaggerModel(object):
             self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
             self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
+            self.input_dropout_probability = tf.placeholder(tf.float32, [], name="dropout_probability")
             self.dropout_probability = tf.placeholder(tf.float32, [], name="dropout_probability")
 
         # From feature indexes to concatenated embeddings.
@@ -33,12 +34,13 @@ class SupertaggerModel(object):
             embeddings_w = collections.OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
             embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(2, embeddings)
-            concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - self.dropout_probability)
+            concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - self.input_dropout_probability)
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
             lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value)
             cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
+            cell = rnn_cell.DropoutWrapper(cell, output_keep_prob= 1.0 - self.dropout_probability)
 
             # Split into LSTM inputs.
             inputs = tf.split(1, max_tokens, concat_embedding)
@@ -62,6 +64,7 @@ class SupertaggerModel(object):
             # From LSTM outputs to softmax.
             flattened = self.flatten(outputs, batch_size, max_tokens)
             penultimate = tf.tanh(rnn_cell.linear(flattened, config.penultimate_hidden_size, True, scope="penultimate"))
+            penultimate = tf.nn.dropout(penultimate, 1.0 - self.dropout_probability)
             softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
 
         with tf.name_scope("prediction"):

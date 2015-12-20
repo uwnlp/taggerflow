@@ -11,8 +11,8 @@ from util import *
 # Evaluate every 2 minutes.
 EVAL_FREQUENCY = 2
 
-# Allow the model 10 chances and about 20 minutes to improve.
-GRACE_PERIOD = 20
+# Allow the model 20 chances and about 40 minutes to improve.
+GRACE_PERIOD = 40
 
 class SupertaggerEvaluationContext(ThreadedContext):
     def __init__(self, session, data, model, writer):
@@ -33,6 +33,7 @@ class SupertaggerEvaluationContext(ThreadedContext):
                 prediction = self.session.run(self.model.prediction, {
                     self.model.x: x,
                     self.model.num_tokens: num_tokens,
+                    self.model.input_dropout_probability: 0.0,
                     self.model.dropout_probability: 0.0
                 })
                 for i,n in enumerate(num_tokens):
