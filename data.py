@@ -93,6 +93,6 @@ class SupertaggerData(object):
             data_x[i,:len(x):] = x
             data_y[i,:len(y)] = y
             data_num_tokens[i] = len(x)
-            data_mask[i,:len(y)] = y >= 0
+            data_mask[i,:len(y)] = (y != self.supertag_space.default_index)
 
         return (data_x, data_y, data_num_tokens, data_mask)
