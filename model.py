@@ -55,25 +55,24 @@ class SupertaggerModel(object):
                                             sequence_length=self.num_tokens)
 
             # Rejoin LSTM outputs.
+            outputs = [tf.expand_dims(output, 1) for output in outputs]
             outputs = tf.concat(1, outputs)
-            outputs = tf.reshape(outputs, [batch_size, max_tokens, -1])
 
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
-            penultimate = tf.tanh(self.linear_layer("penultimate", outputs, config.penultimate_hidden_size))
-            softmax = self.linear_layer("softmax", penultimate, supertags_size)
+            flattened = self.flatten(outputs, batch_size, max_tokens)
+            penultimate = tf.tanh(rnn_cell.linear(flattened, config.penultimate_hidden_size, True, scope="penultimate"))
+            softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
 
         with tf.name_scope("prediction"):
             # Predictions are the indexes with the highest value from the softmax layer.
-            self.prediction = tf.argmax(softmax, 2)
+            self.prediction = tf.argmax(self.unflatten(softmax, batch_size, max_tokens), 2)
 
         with tf.name_scope("loss"):
             # Cross-entropy loss.
-            pseudo_batch_size = batch_size * max_tokens
-
-            self.loss = seq2seq.sequence_loss([tf.reshape(softmax, [pseudo_batch_size, -1])],
-                                              [tf.reshape(self.y, [pseudo_batch_size])],
-                                              [tf.reshape(self.mask, [pseudo_batch_size])],
+            self.loss = seq2seq.sequence_loss([softmax],
+                                              [self.flatten(self.y, batch_size, max_tokens)],
+                                              [self.flatten(self.mask, batch_size, max_tokens)],
                                               supertags_size,
                                               average_across_timesteps=False)
 
@@ -101,13 +100,14 @@ class SupertaggerModel(object):
                 [tf.assign(embeddings_w[name], space.embeddings) for name,space in data.embedding_spaces.items()
                  if isinstance(space, features.PretrainedEmbeddingSpace)])
 
-    # xs contains (batch, timestep, x)
-    # Performs y = xw + b.
-    # Returns the result containing (batch, timestep, x * w + b)
-    def linear_layer(self, name, xs, y_dim):
-        xs_dims = [d.value for d in xs.get_shape()]
-        w = tf.get_variable("{}_w".format(name), [xs_dims[2], y_dim])
-        b = tf.get_variable("{}_b".format(name), [y_dim])
-        flattened_xs = tf.reshape(xs, [-1, xs_dims[2]])
-        ys = tf.nn.xw_plus_b(flattened_xs, w, b)
-        return tf.reshape(ys, [xs_dims[0], xs_dims[1], y_dim])
+    # Commonly used reshaping operations.
+    def flatten(self, x, batch_size, timesteps):
+        if len(x.get_shape()) == 2:
+            return tf.reshape(x, [batch_size * timesteps])
+        elif len(x.get_shape()) == 3:
+            return tf.reshape(x, [batch_size * timesteps, x.get_shape()[2].value])
+        else:
+            raise ValueError("Unsupported shape: {}".format(x.get_shape()))
+
+    def unflatten(self, flattened, batch_size, timesteps):
+        return tf.reshape(flattened, [batch_size, timesteps, -1])
