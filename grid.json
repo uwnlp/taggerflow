@@ -2,9 +2,10 @@
     "seed": [0],
     "init_scale": [0.05],
     "penultimate_hidden_size": [64],
+    "penultimate_nonlinearity": ["tanh", "relu", "relu6"],
     "num_layers": [2],
     "max_grad_norm": [10.0],
-    "regularize" : [true],
-    "input_dropout_probability": [0.7, 0.9],
-    "dropout_probability": [0.5, 0.7]
+    "regularization" : [1e-4, 1e-6],
+    "input_dropout_probability": [0.7, 0.95],
+    "dropout_probability": [0.5]
 }

@@ -62,7 +62,17 @@ class SupertaggerModel(object):
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
             flattened = self.flatten(outputs, batch_size, max_tokens)
-            penultimate = tf.tanh(rnn_cell.linear(flattened, config.penultimate_hidden_size, True, scope="penultimate"))
+            penultimate = rnn_cell.linear(flattened, config.penultimate_hidden_size, True, scope="penultimate")
+            name_to_nonlinearity = {
+                "tanh" : tf.tanh,
+                "relu" : tf.nn.relu,
+                "relu6" : tf.nn.relu6
+            }
+
+            if config.penultimate_nonlinearity in name_to_nonlinearity:
+                penultimate = name_to_nonlinearity[config.penultimate_nonlinearity](penultimate)
+            else:
+                raise ValueError("Unknown nonlinearity: {}".format(config.penultimate_nonlinearity))
             penultimate = tf.nn.dropout(penultimate, 1.0 - self.dropout_probability)
             softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
 
@@ -79,12 +89,7 @@ class SupertaggerModel(object):
                                               average_across_timesteps=False)
 
             params = tf.trainable_variables()
-            if self.config.regularize:
-                # Add L2 regularization for all trainable parameters.
-                self.regularization = 1e-6 * sum(tf.nn.l2_loss(p) for p in params)
-            else:
-                self.regularization = 0.0
-
+            self.regularization = self.config.regularization * sum(tf.nn.l2_loss(p) for p in params)
             self.cost = self.loss + self.regularization
 
         # Construct training operations.

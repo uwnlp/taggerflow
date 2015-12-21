@@ -8,9 +8,10 @@ class SupertaggerConfig(object):
         self.init_scale = hyperparams["init_scale"]
         self.seed = hyperparams["seed"]
         self.penultimate_hidden_size = hyperparams["penultimate_hidden_size"]
+        self.penultimate_nonlinearity = hyperparams["penultimate_nonlinearity"]
         self.num_layers = hyperparams["num_layers"]
         self.max_grad_norm = hyperparams["max_grad_norm"]
-        self.regularize = hyperparams["regularize"]
+        self.regularization = hyperparams["regularization"]
         self.input_dropout_probability = hyperparams["input_dropout_probability"]
         self.dropout_probability = hyperparams["dropout_probability"]
 
