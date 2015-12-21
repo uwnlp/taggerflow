@@ -41,19 +41,24 @@ class SupertaggerData(object):
 
         logging.info("Massaging data into training format...")
 
-        # Dev batch does not change.
-        self.dev_data = self.get_data(dev_sentences, batchable=False)
-        # Train batches are recomputed on the fly.
-        self.train_data = self.get_data(train_sentences, batchable=True)
-        logging.info("Train batches: {}".format(self.train_data[0].shape[0] / self.batch_size))
+        self.train_data = self.get_data(train_sentences)
+        self.dev_data = self.get_data(dev_sentences)
 
+        logging.info("Train batches: {}".format(self.train_data[0].shape[0] / self.batch_size))
+        logging.info("Dev batches: {}".format(self.dev_data[0].shape[0] / self.batch_size))
 
     def get_embedding_indexes(self, token):
         return [space.index(space.extract_from_token(token)) for space in self.embedding_spaces.values()]
 
+    def get_train_batches(self):
+        return self.get_batches(self.train_data)
+
+    def get_dev_batches(self):
+        return self.get_batches(self.dev_data)
+
     def get_batches(self, data):
-        batch_size = self.batch_size
         data_x, data_y, data_num_tokens, data_mask = data
+        batch_size = self.batch_size
         data_size = data_x.shape[0]
         if data_size % batch_size != 0:
             raise ValueError("The data size should be divisible by the batch size.")
@@ -69,14 +74,11 @@ class SupertaggerData(object):
                             data_mask[batch_indexes,:]))
         return batches
 
-    def get_data(self, sentences, batchable):
+    def get_data(self, sentences):
         sentences = [([self.get_embedding_indexes(t) for t in tokens], [self.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
 
-        if batchable:
-            # Make the data size divisible by the batch size.
-            data_size = int(self.batch_size * math.ceil(len(sentences)/float(self.batch_size)))
-        else:
-            data_size = len(sentences)
+        # Make the data size divisible by the batch size.
+        data_size = int(self.batch_size * math.ceil(len(sentences)/float(self.batch_size)))
         data_x = np.zeros([data_size, self.max_tokens, len(self.embedding_spaces)], dtype=np.int32)
         data_y = np.zeros([data_size, self.max_tokens], dtype=np.int32)
         data_num_tokens = np.zeros([data_size], dtype=np.int64)
