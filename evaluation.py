@@ -26,21 +26,20 @@ class SupertaggerEvaluationContext(ThreadedContext):
 
     def loop(self):
         time.sleep(EVAL_FREQUENCY * 60)
+        x,y,num_tokens,mask  = self.data
         with Timer("Dev evaluation"):
-            num_correct = 0
-            num_total = 0
-            for x,y,num_tokens,mask in self.data:
-                prediction = self.session.run(self.model.prediction, {
-                    self.model.x: x,
-                    self.model.num_tokens: num_tokens,
-                    self.model.input_dropout_probability: 0.0,
-                    self.model.dropout_probability: 0.0
-                })
-                for i,n in enumerate(num_tokens):
-                    num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n) if y[i,j] >= 0)
-                num_total += np.sum(mask)
-            accuracy = (100.0 * num_correct)/num_total
-            global_step = tf.train.global_step(self.session, self.model.global_step)
+            prediction = self.session.run(self.model.prediction, {
+                self.model.x: x,
+                self.model.num_tokens: num_tokens,
+                self.model.input_dropout_probability: 0.0,
+                self.model.dropout_probability: 0.0
+            })
+        num_correct = 0
+        for i,n in enumerate(num_tokens):
+            num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n) if y[i,j] >= 0)
+        num_total = np.sum(mask)
+        accuracy = (100.0 * num_correct)/num_total
+        global_step = tf.train.global_step(self.session, self.model.global_step)
 
         logging.info("----------------------------")
         logging.info("Evaluating at step {}.".format(global_step))

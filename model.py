@@ -11,11 +11,10 @@ import features
 
 class SupertaggerModel(object):
 
-    def __init__(self, config, data):
+    def __init__(self, config, data, batch_size):
         self.config = config
 
         # Redeclare some variables for convenience.
-        batch_size = data.batch_size
         supertags_size = data.supertag_space.size()
         embedding_spaces = data.embedding_spaces
         max_tokens = data.max_tokens
@@ -93,12 +92,10 @@ class SupertaggerModel(object):
             optimizer = tf.train.AdamOptimizer()
             grads = tf.gradients(self.cost, params)
             grads, _ = tf.clip_by_global_norm(grads, config.max_grad_norm)
-            self.global_step = tf.Variable(0, name="global_step", trainable=False)
+            self.global_step = tf.get_variable("global_step", shape=[], dtype=tf.int32, initializer=tf.constant_initializer(0), trainable=False)
             self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
 
         with tf.name_scope("initialization"):
-            self.initializer = tf.random_uniform_initializer(-self.config.init_scale,
-                                                             self.config.init_scale, seed=self.config.seed)
             self.initialize = tf.tuple(
                 [tf.assign(embeddings_w[name], space.embeddings) for name,space in data.embedding_spaces.items()
                  if isinstance(space, features.PretrainedEmbeddingSpace)])
