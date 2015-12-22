@@ -1,15 +1,20 @@
 import collections
+import logging
+
+import ccgbank
+
+UNKNOWN_MARKER = "*UNKNOWN*"
+OUT_OF_RANGE_MARKER = "*OOR*"
 
 class FeatureSpace(object):
     def __init__(self, sentences, min_count=None, append_unknown=True):
         counts = collections.Counter(self.extract(sentences))
         self.space = [f for f in counts if min_count is None or counts[f] >= min_count]
 
-        # Append default index for unknown words.
         self.default_index = len(self.space) if append_unknown else -1
         self.ispace = collections.defaultdict(lambda:self.default_index, {f:i for i,f in enumerate(self.space)})
         if append_unknown:
-            self.space.append(None)
+            self.space.append(UNKNOWN_MARKER)
 
     def index(self, f):
         return self.ispace[f]
@@ -30,7 +35,8 @@ class SupertagSpace(FeatureSpace):
     def extract(self, sentences):
         for tokens, supertags in sentences:
             for s in supertags:
-                yield s
+                if s is not None:
+                    yield s
 
 class EmbeddingSpace(FeatureSpace):
     def __init__(self, sentences, min_count=None):
@@ -59,10 +65,12 @@ class PretrainedEmbeddingSpace(EmbeddingSpace):
         with open(embeddings_file) as f:
             for i,line in enumerate(f.readlines()):
                 splits = line.split()
-                word = splits[0].lower()
+                word = splits[0]
 
-                if i == 0 and word != "*unknown*":
+                if i == 0 and word != UNKNOWN_MARKER:
                     raise ValueError("First embedding in the file should represent the unknown word.")
+
+                word = word.lower()
                 if word not in already_added:
                     embedding = [float(s) for s in splits[1:]]
                     if self.embedding_size is None:
@@ -90,7 +98,10 @@ class PrefixSpace(EmbeddingSpace):
         super(PrefixSpace, self).__init__(sentences, min_count)
 
     def extract_from_token(self, token):
-        return token[:self.n] if len(token) >= self.n else None
+        if token == ccgbank.START_MARKER or token == ccgbank.END_MARKER:
+            return token
+        else:
+            return token[:self.n] if len(token) >= self.n else OUT_OF_RANGE_MARKER
 
     def get_embedding_size(self):
         return 32
@@ -99,9 +110,11 @@ class SuffixSpace(EmbeddingSpace):
     def __init__(self, sentences, n, min_count=None):
         self.n = n
         super(SuffixSpace, self).__init__(sentences, min_count)
-
     def extract_from_token(self, token):
-        return token[-self.n:] if len(token) >= self.n else None
+        if token == ccgbank.START_MARKER or token == ccgbank.END_MARKER:
+            return token
+        else:
+            return token[-self.n:] if len(token) >= self.n else OUT_OF_RANGE_MARKER
 
     def get_embedding_size(self):
         return 32

@@ -94,6 +94,7 @@ class SupertaggerData(object):
             data_x[i,:len(x):] = x
 
             # TensorFlow will complain about negative indices.
+            # Convert them to something positive and mask them out later.
             data_y[i,:len(y)] = np.absolute(y)
 
             data_num_tokens[i] = len(x)

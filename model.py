@@ -52,15 +52,8 @@ class SupertaggerModel(object):
             inputs = tf.split(1, max_tokens, concat_embedding)
             inputs = [tf.squeeze(i, [1]) for i in inputs]
 
-            # Both LSTMs have their own initial state.
-            initial_state_fw = tf.get_variable("initial_state_fw", [1, cell.state_size])
-            initial_state_bw = tf.get_variable("initial_state_bw", [1, cell.state_size])
-
             # Construct LSTM.
-            outputs = rnn.bidirectional_rnn(cell, cell, inputs,
-                                            initial_state_fw=tf.tile(initial_state_fw, [batch_size, 1]),
-                                            initial_state_bw=tf.tile(initial_state_bw, [batch_size, 1]),
-                                            sequence_length=self.num_tokens)
+            outputs = rnn.bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
 
             # Rejoin LSTM outputs.
             outputs = [tf.expand_dims(output, 1) for output in outputs]
