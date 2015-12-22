@@ -4,6 +4,7 @@ import os
 import logging
 
 import tensorflow as tf
+import custom_init_ops
 
 from evaluation import *
 from util import *
@@ -17,7 +18,7 @@ class SupertaggerTrainer(object):
 
     def train(self, config, data):
         with tf.Session() as session, Timer("Training") as timer:
-            with tf.variable_scope("model"):
+            with tf.variable_scope("model", initializer=custom_init_ops.dyer_initializer()):
                 train_model = SupertaggerModel(config, data, batch_size=data.batch_size, is_training=True)
 
             with tf.variable_scope("model", reuse=True):
@@ -47,7 +48,7 @@ class SupertaggerTrainer(object):
                         train_cost += cost
                         train_reg += reg
                         if i % 10 == 0:
-                            logging.info("{}/{} training steps taken.".format(i+1,len(train_batches)))
+                            timer.tick("{}/{} training steps".format(i+1,len(train_batches)))
                     train_cost = train_cost / len(train_batches)
                     train_reg = train_reg / len(train_batches)
                     self.writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Cost", simple_value=train_cost)]),
