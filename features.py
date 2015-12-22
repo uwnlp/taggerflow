@@ -1,14 +1,15 @@
 import collections
 
 class FeatureSpace(object):
-    def __init__(self, sentences, min_count=None):
+    def __init__(self, sentences, min_count=None, append_unknown=True):
         counts = collections.Counter(self.extract(sentences))
         self.space = [f for f in counts if min_count is None or counts[f] >= min_count]
 
         # Append default index for unknown words.
-        self.default_index = len(self.space)
+        self.default_index = len(self.space) if append_unknown else -1
         self.ispace = collections.defaultdict(lambda:self.default_index, {f:i for i,f in enumerate(self.space)})
-        self.space.append(None)
+        if append_unknown:
+            self.space.append(None)
 
     def index(self, f):
         return self.ispace[f]
@@ -24,7 +25,7 @@ class FeatureSpace(object):
 
 class SupertagSpace(FeatureSpace):
     def __init__(self, sentences, min_count=None):
-        super(SupertagSpace, self).__init__(sentences, min_count)
+        super(SupertagSpace, self).__init__(sentences, min_count, append_unknown=False)
 
     def extract(self, sentences):
         for tokens, supertags in sentences:

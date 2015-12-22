@@ -14,7 +14,7 @@ class SupertaggerData(object):
     min_supertag_count = 10
     min_affix_count = 3
     max_tokens = 100
-    batch_size = 512
+    batch_size = 12
 
     def __init__(self):
         train_sentences, dev_sentences = SupertagReader().get_splits()
@@ -90,9 +90,15 @@ class SupertaggerData(object):
             if len(x) > self.max_tokens:
                 logging.info("Skipping sentence of length {}.".format(len(x)))
                 continue
+
             data_x[i,:len(x):] = x
-            data_y[i,:len(y)] = y
+
+            # TensorFlow will complain about negative indices.
+            data_y[i,:len(y)] = np.absolute(y)
+
             data_num_tokens[i] = len(x)
-            data_mask[i,:len(y)] = (y != self.supertag_space.default_index)
+
+            # Labels with negative indices should have 0 weight.
+            data_mask[i,:len(y)] = y >= 0
 
         return (data_x, data_y, data_num_tokens, data_mask)

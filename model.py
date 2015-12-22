@@ -7,6 +7,7 @@ from tensorflow.python.ops import rnn
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import seq2seq
 
+import logging
 import features
 
 class SupertaggerModel(object):
@@ -38,8 +39,12 @@ class SupertaggerModel(object):
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
-            lstm_cell = rnn_cell.BasicLSTMCell(concat_embedding.get_shape()[2].value)
-            cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
+            first_cell = rnn_cell.LSTMCell(config.lstm_hidden_size, concat_embedding.get_shape()[2].value)
+            stacked_cell = rnn_cell.LSTMCell(config.lstm_hidden_size, config.lstm_hidden_size)
+            if config.num_layers > 1:
+                cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (config.num_layers - 1))
+            else:
+                cell = first_cell
             cell = rnn_cell.DropoutWrapper(cell, output_keep_prob= 1.0 - self.dropout_probability)
 
             # Split into LSTM inputs.
@@ -92,6 +97,11 @@ class SupertaggerModel(object):
             params = tf.trainable_variables()
             self.regularization = self.config.regularization * sum(tf.nn.l2_loss(p) for p in params)
             self.cost = self.loss + self.regularization
+
+        #logging.info("-----Parameters-----")
+        #for p in params:
+        #    logging.info("{} ({}) : {} ".format(p.name, p.dtype, p.get_shape()))
+        #logging.info("--------------------")
 
         # Construct training operations.
         with tf.name_scope("training"):
