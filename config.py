@@ -5,8 +5,6 @@ class SupertaggerConfig(object):
 
     def __init__(self, hyperparams, varying_keys):
         # Save as member variables for convenience.
-        self.init_scale = hyperparams["init_scale"]
-        self.seed = hyperparams["seed"]
         self.lstm_hidden_size = hyperparams["lstm_hidden_size"]
         self.penultimate_hidden_size = hyperparams["penultimate_hidden_size"]
         self.penultimate_nonlinearity = hyperparams["penultimate_nonlinearity"]

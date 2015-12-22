@@ -50,12 +50,6 @@ class SupertaggerData(object):
     def get_embedding_indexes(self, token):
         return [space.index(space.extract_from_token(token)) for space in self.embedding_spaces.values()]
 
-    def get_train_batches(self):
-        return self.get_batches(self.train_data)
-
-    def get_dev_batches(self):
-        return self.get_batches(self.dev_data)
-
     def get_batches(self, data):
         data_x, data_y, data_num_tokens, data_mask = data
         batch_size = self.batch_size

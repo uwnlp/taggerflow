@@ -1,6 +1,4 @@
 {
-    "seed": [0],
-    "init_scale": [0.05],
     "lstm_hidden_size": [128],
     "penultimate_hidden_size": [64],
     "penultimate_nonlinearity": ["tanh"],

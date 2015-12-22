@@ -13,11 +13,10 @@ import custom_rnn_cell
 
 class SupertaggerModel(object):
 
-    def __init__(self, config, data):
+    def __init__(self, config, data, batch_size):
         self.config = config
 
         # Redeclare some variables for convenience.
-        batch_size = data.batch_size
         supertags_size = data.supertag_space.size()
         embedding_spaces = data.embedding_spaces
         max_tokens = data.max_tokens
@@ -28,7 +27,7 @@ class SupertaggerModel(object):
             self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
             self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
-            self.input_dropout_probability = tf.placeholder(tf.float32, [], name="dropout_probability")
+            self.input_dropout_probability = tf.placeholder(tf.float32, [], name="input_dropout_probability")
             self.dropout_probability = tf.placeholder(tf.float32, [], name="dropout_probability")
 
         # From feature indexes to concatenated embeddings.
@@ -97,12 +96,10 @@ class SupertaggerModel(object):
             optimizer = tf.train.AdamOptimizer()
             grads = tf.gradients(self.cost, params)
             grads, _ = tf.clip_by_global_norm(grads, config.max_grad_norm)
-            self.global_step = tf.Variable(0, name="global_step", trainable=False)
+            self.global_step = tf.get_variable("global_step", [], trainable=False, initializer=tf.constant_initializer(0))
             self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
 
         with tf.name_scope("initialization"):
-            self.initializer = tf.random_uniform_initializer(-self.config.init_scale,
-                                                             self.config.init_scale, seed=self.config.seed)
             self.initialize = tf.tuple(
                 [tf.assign(embeddings_w[name], space.embeddings) for name,space in data.embedding_spaces.items()
                  if isinstance(space, features.PretrainedEmbeddingSpace)])
