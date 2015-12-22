@@ -99,11 +99,6 @@ class SupertaggerModel(object):
             self.regularization = self.config.regularization * sum(tf.nn.l2_loss(p) for p in params)
             self.cost = self.loss + self.regularization
 
-        #logging.info("-----Parameters-----")
-        #for p in params:
-        #    logging.info("{} ({}) : {} ".format(p.name, p.dtype, p.get_shape()))
-        #logging.info("--------------------")
-
         # Construct training operations.
         with tf.name_scope("training"):
             optimizer = tf.train.AdamOptimizer()
