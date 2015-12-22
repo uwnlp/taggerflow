@@ -43,10 +43,10 @@ class SupertaggerModel(object):
             first_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, concat_embedding.get_shape()[2].value)
             keep_prob = 1.0 - config.dropout_probability
             if is_training:
-                first_cell = rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
+                first_cell = rnn_cell.DropoutWrapper(first_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             stacked_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, config.lstm_hidden_size)
             if is_training:
-                stacked_cell = rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
+                stacked_cell = rnn_cell.DropoutWrapper(stacked_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             if config.num_layers > 1:
                 cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (config.num_layers - 1))
             else:
