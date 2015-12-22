@@ -28,8 +28,6 @@ class SupertaggerModel(object):
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
             if is_training:
                 self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
-                self.input_dropout_probability = tf.placeholder(tf.float32, [], name="input_dropout_probability")
-                self.dropout_probability = tf.placeholder(tf.float32, [], name="dropout_probability")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"), tf.device("/cpu:0"):
@@ -37,7 +35,7 @@ class SupertaggerModel(object):
             embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(2, embeddings)
             if is_training:
-                concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - self.input_dropout_probability)
+                concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - config.input_dropout_probability)
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
@@ -49,7 +47,7 @@ class SupertaggerModel(object):
                 cell = first_cell
 
             if is_training:
-                cell = rnn_cell.DropoutWrapper(cell, output_keep_prob= 1.0 - self.dropout_probability)
+                cell = rnn_cell.DropoutWrapper(cell, output_keep_prob= 1.0 - config.dropout_probability)
 
             # Split into LSTM inputs.
             inputs = tf.split(1, max_tokens, concat_embedding)
@@ -77,7 +75,7 @@ class SupertaggerModel(object):
             else:
                 raise ValueError("Unknown nonlinearity: {}".format(config.penultimate_nonlinearity))
             if is_training:
-                penultimate = tf.nn.dropout(penultimate, 1.0 - self.dropout_probability)
+                penultimate = tf.nn.dropout(penultimate, 1.0 - config.dropout_probability)
             softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
 
         with tf.name_scope("prediction"):
