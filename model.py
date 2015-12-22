@@ -30,24 +30,27 @@ class SupertaggerModel(object):
                 self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
 
         # From feature indexes to concatenated embeddings.
-        with tf.name_scope("embeddings"), tf.device("/cpu:0"):
-            embeddings_w = collections.OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
-            embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
-        concat_embedding = tf.concat(2, embeddings)
-        if is_training:
-            concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - config.input_dropout_probability)
+        with tf.name_scope("embeddings"):
+            with tf.device("/cpu:0"):
+                embeddings_w = collections.OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
+                embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
+            concat_embedding = tf.concat(2, embeddings)
+            if is_training:
+                concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - config.input_dropout_probability)
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
             first_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, concat_embedding.get_shape()[2].value)
+            keep_prob = 1.0 - config.dropout_probability
+            if is_training:
+                first_cell = rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             stacked_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, config.lstm_hidden_size)
+            if is_training:
+                stacked_cell = rnn_cell.DropoutWrapper(cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             if config.num_layers > 1:
                 cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (config.num_layers - 1))
             else:
                 cell = first_cell
-
-            if is_training:
-                cell = rnn_cell.DropoutWrapper(cell, output_keep_prob= 1.0 - config.dropout_probability)
 
             # Split into LSTM inputs.
             inputs = tf.split(1, max_tokens, concat_embedding)
