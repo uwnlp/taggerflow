@@ -106,8 +106,8 @@ class SupertaggerModel(object):
                 self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
 
             with tf.name_scope("initialization"):
-                self.initialize = tf.tuple(
-                    [tf.assign(embeddings_w[name], space.embeddings) for name,space in data.embedding_spaces.items()
+                self.initialize = tf.group(
+                    *[tf.assign(embeddings_w[name], space.embeddings) for name,space in data.embedding_spaces.items()
                      if isinstance(space, features.PretrainedEmbeddingSpace)])
 
     # Commonly used reshaping operations.
