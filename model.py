@@ -9,6 +9,7 @@ from tensorflow.python.ops import seq2seq
 
 import logging
 import features
+import custom_rnn_cell
 
 class SupertaggerModel(object):
 
@@ -39,8 +40,8 @@ class SupertaggerModel(object):
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
-            first_cell = rnn_cell.LSTMCell(config.lstm_hidden_size, concat_embedding.get_shape()[2].value)
-            stacked_cell = rnn_cell.LSTMCell(config.lstm_hidden_size, config.lstm_hidden_size)
+            first_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, concat_embedding.get_shape()[2].value)
+            stacked_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, config.lstm_hidden_size)
             if config.num_layers > 1:
                 cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (config.num_layers - 1))
             else:
