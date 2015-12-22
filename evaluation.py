@@ -12,7 +12,10 @@ from util import *
 EVAL_FREQUENCY = 2
 
 # Allow the model 20 chances and about 40 minutes to improve.
-GRACE_PERIOD = 40
+#GRACE_PERIOD = 40
+
+# Run basically forever.
+GRACE_PERIOD = 10000
 
 class SupertaggerEvaluationContext(ThreadedContext):
     def __init__(self, session, data, model, writer):
