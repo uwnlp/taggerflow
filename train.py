@@ -18,10 +18,10 @@ class SupertaggerTrainer(object):
     def train(self, config, data):
         with tf.Session() as session, Timer("Training") as timer:
             with tf.variable_scope("model"):
-                train_model = SupertaggerModel(config, data, data.batch_size)
+                train_model = SupertaggerModel(config, data, batch_size=data.batch_size, is_training=True)
 
             with tf.variable_scope("model", reuse=True):
-                dev_model = SupertaggerModel(config, data, data.dev_data[0].shape[0])
+                dev_model = SupertaggerModel(config, data, batch_size=data.dev_data[0].shape[0], is_training=False)
 
             session.run(tf.initialize_all_variables())
             session.run(train_model.initialize)

@@ -33,9 +33,7 @@ class SupertaggerEvaluationContext(ThreadedContext):
         with Timer("Dev evaluation"):
             prediction = self.session.run(self.model.prediction, {
                 self.model.x: x,
-                self.model.num_tokens: num_tokens,
-                self.model.input_dropout_probability: 0.0,
-                self.model.dropout_probability: 0.0
+                self.model.num_tokens: num_tokens
             })
         num_correct = 0
         for i,n in enumerate(num_tokens):
