@@ -94,6 +94,6 @@ class SupertaggerData(object):
             data_num_tokens[i] = len(x)
 
             # Labels with negative indices should have 0 weight.
-            data_mask[i,:len(y)] = y >= 0
+            data_mask[i,:len(y)] = [int(y_val >= 0) for y_val in y]
 
         return (data_x, data_y, data_num_tokens, data_mask)

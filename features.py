@@ -82,6 +82,12 @@ class PretrainedEmbeddingSpace(EmbeddingSpace):
                     self.space.append(word)
                     self.embeddings.append(embedding)
 
+        # Extra markers and tokens not found in the the embeddings file.
+        self.space.append(ccgbank.START_MARKER)
+        self.space.append(ccgbank.END_MARKER)
+        self.space.append("")
+        self.embeddings.extend(3 * ([0.0] * self.embedding_size))
+
         self.space = list(self.space)
         self.ispace = collections.defaultdict(lambda:0, {f:i for i,f in enumerate(self.space)})
 
