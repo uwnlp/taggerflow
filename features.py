@@ -57,7 +57,9 @@ class EmbeddingSpace(FeatureSpace):
         raise NotImplementedError("Subclasses must implement this!")
 
 class PretrainedEmbeddingSpace(EmbeddingSpace):
-    def __init__(self, embeddings_file):
+    def __init__(self, embeddings_file=None):
+        if embeddings_file is None:
+            return
         already_added = set()
         self.embedding_size = None
         self.space = []
