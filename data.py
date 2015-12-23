@@ -14,7 +14,7 @@ class SupertaggerData(object):
     min_supertag_count = 10
     min_affix_count = 3
     max_tokens = 100
-    batch_size = 512
+    batch_size = 32
 
     def __init__(self):
         train_sentences, dev_sentences = SupertagReader().get_splits()
