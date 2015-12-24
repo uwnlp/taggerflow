@@ -1,7 +1,7 @@
 {
     "lstm_hidden_size": [128],
     "penultimate_hidden_size": [64],
-    "penultimate_nonlinearity": ["tanh"],
+    "penultimate_nonlinearity": ["relu"],
     "num_layers": [2],
     "max_grad_norm": [5.0],
     "regularization" : [1e-6],

@@ -41,16 +41,12 @@ class SupertaggerModel(object):
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
             first_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, concat_embedding.get_shape()[2].value)
-            keep_prob = 1.0 - config.dropout_probability
-            if is_training:
-                first_cell = rnn_cell.DropoutWrapper(first_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             stacked_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, config.lstm_hidden_size)
-            if is_training:
-                stacked_cell = rnn_cell.DropoutWrapper(stacked_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             if config.num_layers > 1:
                 cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (config.num_layers - 1))
             else:
                 cell = first_cell
+
 
             # Split into LSTM inputs.
             inputs = tf.split(1, max_tokens, concat_embedding)

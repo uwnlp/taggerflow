@@ -181,14 +181,20 @@ class Parameters:
                 logging.info("Loaded pretrained matrix: {} {}".format(k, v.shape))
 
     def assign_pretrained(self, session):
+        unassigned_variables = set(v.name for v in tf.all_variables())
+
         for name, space in self.embedding_spaces.items():
             if hasattr(space, "embeddings"):
                 variable = tf.get_variable(name, [space.size(), space.embedding_size])
                 logging.info("Assigning pretrained embeddings for {}.".format(variable.name))
+                unassigned_variables.remove(variable.name)
                 session.run(tf.assign(variable, space.embeddings))
 
         for name, matrix_names in self.variable_mapping.items():
             concat = np.concatenate([self.matrices[n] for n in matrix_names])
             variable = tf.get_variable(name, concat.shape)
             logging.info("Assigning pretrained matrix for {}.".format(variable.name))
+            unassigned_variables.remove(variable.name)
             session.run(tf.assign(variable, concat))
+
+        logging.info("Remaining unassigned variables: {}".format(unassigned_variables))
