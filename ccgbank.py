@@ -17,7 +17,7 @@ class SupertagReader(object):
             sentences = [zip(*[self.get_word_and_supertag(split.split("|")) for split in line.split(" ")]) for line in f.readlines()]
             return [([START_MARKER] + list(words) + [END_MARKER], [None] + list(supertags) + [None]) for words,supertags in sentences]
 
-    def get_splits(self, tritraining=False):
+    def get_splits(self, train_file):
         return [self.get_sentences(util.maybe_download("data",
                                                        "http://appositive.cs.washington.edu/resources/",
-                                                       split_name + ".stagged")) for split_name in ("tritrain_6" if tritraining else "train", "dev")]
+                                                       split_name + ".stagged")) for split_name in (train_file, "dev")]

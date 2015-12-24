@@ -1,6 +1,6 @@
 import os
 import time
-import urllib
+import urllib2
 import logging
 import threading
 import datetime
@@ -14,7 +14,9 @@ def maybe_download(data_dir, source_url, filename):
     else:
         file_url = source_url + filename
         logging.info("Downloading {}...".format(file_url))
-        filepath, _ = urllib.urlretrieve(file_url, filepath)
+        response = urllib2.urlopen(file_url)
+        with open(filepath, "wb") as f:
+            f.write(response.read())
         statinfo = os.stat(filepath)
         logging.info("Succesfully downloaded {} ({} bytes).".format(file_url, statinfo.st_size))
     return filepath
