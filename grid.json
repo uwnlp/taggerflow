@@ -5,6 +5,5 @@
     "num_layers": [2],
     "max_grad_norm": [5.0],
     "regularization" : [1e-6],
-    "input_dropout_probability": [0.7],
     "dropout_probability": [0.5]
 }

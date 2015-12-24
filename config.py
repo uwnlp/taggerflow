@@ -11,7 +11,6 @@ class SupertaggerConfig(object):
         self.num_layers = hyperparams["num_layers"]
         self.max_grad_norm = hyperparams["max_grad_norm"]
         self.regularization = hyperparams["regularization"]
-        self.input_dropout_probability = hyperparams["input_dropout_probability"]
         self.dropout_probability = hyperparams["dropout_probability"]
 
         shortened_hyperparams = { self.shorten(k):v for k,v in hyperparams.items() if k in varying_keys}

@@ -12,7 +12,7 @@ from util import *
 
 class SupertaggerData(object):
     max_tokens = 100
-    batch_size = 32
+    batch_size = 512
 
     def __init__(self, supertag_space, embedding_spaces, train_sentences, dev_sentences):
         self.supertag_space = supertag_space

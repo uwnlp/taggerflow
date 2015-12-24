@@ -36,7 +36,7 @@ class SupertaggerModel(object):
                 embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(2, embeddings)
             if is_training:
-                concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - config.input_dropout_probability)
+                concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - config.dropout_probability)
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
@@ -73,8 +73,6 @@ class SupertaggerModel(object):
                 penultimate = name_to_nonlinearity[config.penultimate_nonlinearity](penultimate)
             else:
                 raise ValueError("Unknown nonlinearity: {}".format(config.penultimate_nonlinearity))
-            if is_training:
-                penultimate = tf.nn.dropout(penultimate, 1.0 - config.dropout_probability)
             softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
 
         with tf.name_scope("prediction"):
