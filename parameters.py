@@ -89,17 +89,63 @@ class MatrixReader(ParameterReader):
             expected_column_size = 1 if len(self.dimensions) == 1 else self.dimensions[1]
             if len(splits) != expected_column_size:
                 raise ValueError("Expected column size {} but was {}".format(expected_column_size, len(splits)))
-            self.matrix.append([float(s) for s in splits])
+
+            if len(splits) == 1:
+                self.matrix.append(float(splits[0]))
+            else:
+                self.matrix.append([float(s) for s in splits])
 
     def get_result(self):
         if len(self.matrix) != self.dimensions[0]:
             raise ValueError("Expected row size {} but was {}.".format(self.dimensions[0], len(self.matrix)))
-        return np.array(self.matrix)
+        return np.array(self.matrix).T
 
 class Parameters:
     readers = {
         "EMBEDDINGS" : EmbeddingsReader,
         "PARAMETERS" : MatrixReader
+    }
+
+    variable_mapping = {
+        # First layer of the forward LSTM.
+        "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/input_gate/Matrix" : ["forward_lstm_layer_1_parameters_0", "forward_lstm_layer_1_parameters_1", "forward_lstm_layer_1_parameters_2"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/input_gate/Bias" : ["forward_lstm_layer_1_parameters_3"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/new_input/Matrix" : ["forward_lstm_layer_1_parameters_8", "forward_lstm_layer_1_parameters_9"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/new_input/Bias" : ["forward_lstm_layer_1_parameters_10"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/output_gate/Matrix" : ["forward_lstm_layer_1_parameters_4", "forward_lstm_layer_1_parameters_5", "forward_lstm_layer_1_parameters_6"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/output_gate/Bias" : ["forward_lstm_layer_1_parameters_7"],
+
+        # Second layer of the forward LSTM.
+        "BiRNN_FW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/input_gate/Matrix" : ["forward_lstm_layer_2_parameters_0", "forward_lstm_layer_2_parameters_1", "forward_lstm_layer_2_parameters_2"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/input_gate/Bias" : ["forward_lstm_layer_2_parameters_3"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/new_input/Matrix" : ["forward_lstm_layer_2_parameters_8", "forward_lstm_layer_2_parameters_9"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/new_input/Bias" : ["forward_lstm_layer_2_parameters_10"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/output_gate/Matrix" : ["forward_lstm_layer_2_parameters_4", "forward_lstm_layer_2_parameters_5", "forward_lstm_layer_2_parameters_6"],
+        "BiRNN_FW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/output_gate/Bias" : ["forward_lstm_layer_2_parameters_7"],
+
+        # First layer of the backward LSTM.
+        "BiRNN_BW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/input_gate/Matrix" : ["backward_lstm_layer_1_parameters_0", "backward_lstm_layer_1_parameters_1", "backward_lstm_layer_1_parameters_2"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/input_gate/Bias" : ["backward_lstm_layer_1_parameters_3"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/new_input/Matrix" : ["backward_lstm_layer_1_parameters_8", "backward_lstm_layer_1_parameters_9"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/new_input/Bias" : ["backward_lstm_layer_1_parameters_10"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/output_gate/Matrix" : ["backward_lstm_layer_1_parameters_4", "backward_lstm_layer_1_parameters_5", "backward_lstm_layer_1_parameters_6"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/output_gate/Bias" : ["backward_lstm_layer_1_parameters_7"],
+
+        # Second layer of the backward LSTM.
+        "BiRNN_BW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/input_gate/Matrix" : ["backward_lstm_layer_2_parameters_0", "backward_lstm_layer_2_parameters_1", "backward_lstm_layer_2_parameters_2"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/input_gate/Bias" : ["backward_lstm_layer_2_parameters_3"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/new_input/Matrix" : ["backward_lstm_layer_2_parameters_8", "backward_lstm_layer_2_parameters_9"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/new_input/Bias" : ["backward_lstm_layer_2_parameters_10"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/output_gate/Matrix" : ["backward_lstm_layer_2_parameters_4", "backward_lstm_layer_2_parameters_5", "backward_lstm_layer_2_parameters_6"],
+        "BiRNN_BW/RNN/MultiRNNCell/Cell1/DyerLSTMCell/output_gate/Bias" : ["backward_lstm_layer_2_parameters_7"],
+
+        # Penultimate layer.
+        "penultimate/Matrix" : ["forward_lstm_to_penultimate", "backward_lstm_to_penultimate"],
+        "penultimate/Bias" : ["penultimate_bias"],
+
+        # Softmax layer.
+        "softmax/Matrix" : ["penultimate_to_softmax"],
+        "softmax/Bias" : ["softmax_bias"]
     }
 
     param_header_regex = "\*(.*)\*(.*)"
@@ -131,11 +177,18 @@ class Parameters:
                     current_reader.readline(i - offset, line)
 
             logging.info("Loaded pretrained embedding spaces: {}".format(self.embedding_spaces.keys()))
-            logging.info("Loaded pretrained matrices: {}".format(self.matrices.keys()))
+            for k,v in self.matrices.items():
+                logging.info("Loaded pretrained matrix: {} {}".format(k, v.shape))
 
     def assign_pretrained(self, session):
         for name, space in self.embedding_spaces.items():
             if hasattr(space, "embeddings"):
-                embedding_w = tf.get_variable(name, [space.size(), space.embedding_size])
-                logging.info("Assigning pretrained embeddings for {}".format(embedding_w.name))
-                session.run(tf.assign(embedding_w, space.embeddings))
+                variable = tf.get_variable(name, [space.size(), space.embedding_size])
+                logging.info("Assigning pretrained embeddings for {}.".format(variable.name))
+                session.run(tf.assign(variable, space.embeddings))
+
+        for name, matrix_names in self.variable_mapping.items():
+            concat = np.concatenate([self.matrices[n] for n in matrix_names])
+            variable = tf.get_variable(name, concat.shape)
+            logging.info("Assigning pretrained matrix for {}.".format(variable.name))
+            session.run(tf.assign(variable, concat))
