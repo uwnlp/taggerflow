@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("-g", "--gpu", help="specify gpu devices to use")
     parser.add_argument("-l", "--logdir", help="directory to contain logs", default="logs")
     parser.add_argument("-p", "--params", help="pretrained parameter file")
+    parser.add_argument("-t", "--tritrain", help="whether or not to use tri-training data instead", action="store_true")
     args = parser.parse_args()
 
     if args.gpu is not None:
@@ -52,7 +53,7 @@ if __name__ == "__main__":
         os.makedirs(exp_logdir)
 
     with LoggingToFile(exp_logdir, "init.log"):
-        train_sentences, dev_sentences = SupertagReader().get_splits()
+        train_sentences, dev_sentences = SupertagReader().get_splits(args.tritrain)
         supertag_space = SupertagSpace(maybe_download("data",
                                                       "http://appositive.cs.washington.edu/resources/",
                                                       "categories"))
