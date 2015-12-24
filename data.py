@@ -33,7 +33,7 @@ class SupertaggerData(object):
         logging.info("Dev batches: {}".format(self.dev_data[0].shape[0] / self.batch_size))
 
     def get_embedding_indexes(self, token):
-        return [space.index(space.extract_from_token(token)) for space in self.embedding_spaces.values()]
+        return [space.index(space.extract(token)) for space in self.embedding_spaces.values()]
 
     def get_batches(self, data):
         data_x, data_y, data_num_tokens, data_mask = data
@@ -54,7 +54,7 @@ class SupertaggerData(object):
         return batches
 
     def get_data(self, sentences):
-        sentences = [([self.get_embedding_indexes(t) for t in tokens], [self.supertag_space.index(s) for s in supertags]) for tokens, supertags in sentences]
+        sentences = [([self.get_embedding_indexes(t) for t in tokens], [self.supertag_space.index(s) for s in supertags], weights) for tokens, supertags, weights in sentences]
 
         # Make the data size divisible by the batch size.
         data_size = int(self.batch_size * math.ceil(len(sentences)/float(self.batch_size)))
@@ -63,9 +63,11 @@ class SupertaggerData(object):
         data_num_tokens = np.zeros([data_size], dtype=np.int64)
         data_mask = np.zeros([data_size, self.max_tokens], dtype=np.float32)
 
-        for i,(x,y) in enumerate(sentences):
+        for i,(x,y,weights) in enumerate(sentences):
             if len(x) != len(y):
-                raise ValueError("Number of tokens should match number of supertags.")
+                raise ValueError("Number of tokens ({}) should match number of supertags ({}).".format(len(x), len(y)))
+            if len(x) != len(weights):
+                raise ValueError("Number of tokens ({}) should match number of weights ({}).".format(len(x), len(weights)))
             if len(x) > self.max_tokens:
                 logging.info("Skipping sentence of length {}.".format(len(x)))
                 continue
@@ -80,5 +82,6 @@ class SupertaggerData(object):
 
             # Labels with negative indices should have 0 weight.
             data_mask[i,:len(y)] = [int(y_val >= 0) for y_val in y]
+            data_mask[i,:len(weights)] *= weights
 
         return (data_x, data_y, data_num_tokens, data_mask)

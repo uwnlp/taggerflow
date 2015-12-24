@@ -25,14 +25,7 @@ class SupertagSpace(FeatureSpace):
 
 # Should define embedding_size.
 class EmbeddingSpace(FeatureSpace):
-    def extract(self, sentences):
-        for tokens, supertags in sentences:
-            for t in tokens:
-                feature = self.extract_from_token(t)
-                if feature is not None:
-                    yield feature
-
-    def extract_from_token(self, token):
+    def extract(self, token):
         raise NotImplementedError("Subclasses must implement this!")
 
 class TurianEmbeddingSpace(EmbeddingSpace):
@@ -72,11 +65,11 @@ class TurianEmbeddingSpace(EmbeddingSpace):
         self.space = list(self.space)
         self.ispace = collections.defaultdict(lambda:0, {f:i for i,f in enumerate(self.space)})
 
-    def extract_from_token(self, token):
+    def extract(self, token):
         return token.lower()
 
 class WordSpace(EmbeddingSpace):
-    def extract_from_token(self, token):
+    def extract(self, token):
         return token.lower()
 
 class PrefixSpace(EmbeddingSpace):
@@ -84,7 +77,7 @@ class PrefixSpace(EmbeddingSpace):
         self.n = n
         self.embedding_size = 32
 
-    def extract_from_token(self, token):
+    def extract(self, token):
         if token == ccgbank.START_MARKER or token == ccgbank.END_MARKER:
             return token
         else:
@@ -95,7 +88,7 @@ class SuffixSpace(EmbeddingSpace):
         self.n = n
         self.embedding_size = 32
 
-    def extract_from_token(self, token):
+    def extract(self, token):
         if token == ccgbank.START_MARKER or token == ccgbank.END_MARKER:
             return token
         else:
@@ -104,8 +97,8 @@ class SuffixSpace(EmbeddingSpace):
 class EmpiricalEmbeddingSpace(EmbeddingSpace):
     def __init__(self, sentences, min_count):
         counts = collections.Counter()
-        for tokens, supertags in sentences:
-            counts.update((self.extract_from_token(t) for t in tokens))
+        for tokens,supertags,weights in sentences:
+            counts.update((self.extract(t) for t in tokens))
 
         self.space = [f for f in counts if counts[f] >= min_count]
         self.default_index = len(self.space)
