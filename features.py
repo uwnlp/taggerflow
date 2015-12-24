@@ -6,16 +6,8 @@ import ccgbank
 UNKNOWN_MARKER = "*UNKNOWN*"
 OUT_OF_RANGE_MARKER = "*OOR*"
 
+# Should define space and ispace.
 class FeatureSpace(object):
-    def __init__(self, sentences, min_count=None, append_unknown=True):
-        counts = collections.Counter(self.extract(sentences))
-        self.space = [f for f in counts if min_count is None or counts[f] >= min_count]
-
-        self.default_index = len(self.space) if append_unknown else -1
-        self.ispace = collections.defaultdict(lambda:self.default_index, {f:i for i,f in enumerate(self.space)})
-        if append_unknown:
-            self.space.append(UNKNOWN_MARKER)
-
     def index(self, f):
         return self.ispace[f]
 
@@ -25,24 +17,14 @@ class FeatureSpace(object):
     def size(self):
         return len(self.space)
 
-    def extract(self, sentence):
-        raise NotImplementedError("Subclasses must implement this!")
-
 class SupertagSpace(FeatureSpace):
-    def __init__(self, sentences, min_count=None):
-        super(SupertagSpace, self).__init__(sentences, min_count, append_unknown=False)
+    def __init__(self, supertags_file):
+        with open(supertags_file) as f:
+            self.space = [line.strip() for line in f.readlines()]
+            self.ispace = collections.defaultdict(lambda: -1, {f:i for i,f in enumerate(self.space)})
 
-    def extract(self, sentences):
-        for tokens, supertags in sentences:
-            for s in supertags:
-                if s is not None:
-                    yield s
-
+# Should define embedding_size.
 class EmbeddingSpace(FeatureSpace):
-    def __init__(self, sentences, min_count=None):
-        super(EmbeddingSpace, self).__init__(sentences, min_count)
-        self.embedding_size = self.get_embedding_size()
-
     def extract(self, sentences):
         for tokens, supertags in sentences:
             for t in tokens:
@@ -53,13 +35,8 @@ class EmbeddingSpace(FeatureSpace):
     def extract_from_token(self, token):
         raise NotImplementedError("Subclasses must implement this!")
 
-    def get_embedding_size(self):
-        raise NotImplementedError("Subclasses must implement this!")
-
-class PretrainedEmbeddingSpace(EmbeddingSpace):
-    def __init__(self, embeddings_file=None):
-        if embeddings_file is None:
-            return
+class TurianEmbeddingSpace(EmbeddingSpace):
+    def __init__(self, embeddings_file):
         already_added = set()
         self.embedding_size = None
         self.space = []
@@ -95,17 +72,17 @@ class PretrainedEmbeddingSpace(EmbeddingSpace):
         self.space = list(self.space)
         self.ispace = collections.defaultdict(lambda:0, {f:i for i,f in enumerate(self.space)})
 
-class WordSpace(PretrainedEmbeddingSpace):
-    def __init__(self, embeddings_file):
-        super(WordSpace, self).__init__(embeddings_file)
+    def extract_from_token(self, token):
+        return token.lower()
 
+class WordSpace(EmbeddingSpace):
     def extract_from_token(self, token):
         return token.lower()
 
 class PrefixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n, min_count=None):
+    def __init__(self, n):
         self.n = n
-        super(PrefixSpace, self).__init__(sentences, min_count)
+        self.embedding_size = 32
 
     def extract_from_token(self, token):
         if token == ccgbank.START_MARKER or token == ccgbank.END_MARKER:
@@ -113,18 +90,34 @@ class PrefixSpace(EmbeddingSpace):
         else:
             return token[:self.n] if len(token) >= self.n else OUT_OF_RANGE_MARKER
 
-    def get_embedding_size(self):
-        return 32
-
 class SuffixSpace(EmbeddingSpace):
-    def __init__(self, sentences, n, min_count=None):
+    def __init__(self, n):
         self.n = n
-        super(SuffixSpace, self).__init__(sentences, min_count)
+        self.embedding_size = 32
+
     def extract_from_token(self, token):
         if token == ccgbank.START_MARKER or token == ccgbank.END_MARKER:
             return token
         else:
             return token[-self.n:] if len(token) >= self.n else OUT_OF_RANGE_MARKER
 
-    def get_embedding_size(self):
-        return 32
+class EmpiricalEmbeddingSpace(EmbeddingSpace):
+    def __init__(self, sentences, min_count):
+        counts = collections.Counter()
+        for tokens, supertags in sentences:
+            counts.update((self.extract_from_token(t) for t in tokens))
+
+        self.space = [f for f in counts if counts[f] >= min_count]
+        self.default_index = len(self.space)
+        self.ispace = collections.defaultdict(lambda:self.default_index, {f:i for i,f in enumerate(self.space)})
+        self.space.append(UNKNOWN_MARKER)
+
+class EmpiricalPrefixSpace(EmpiricalEmbeddingSpace, PrefixSpace):
+    def __init__(self, n, sentences, min_count=3):
+        PrefixSpace.__init__(self, n)
+        EmpiricalEmbeddingSpace.__init__(self, sentences, min_count)
+
+class EmpiricalSuffixSpace(EmpiricalEmbeddingSpace, SuffixSpace):
+    def __init__(self, n, sentences, min_count=3):
+        SuffixSpace.__init__(self, n)
+        EmpiricalEmbeddingSpace.__init__(self, sentences, min_count)

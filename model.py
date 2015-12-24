@@ -32,7 +32,7 @@ class SupertaggerModel(object):
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"):
             with tf.device("/cpu:0"):
-                embeddings_w = collections.OrderedDict((name, tf.get_variable("{}_embedding_w".format(name), [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
+                embeddings_w = collections.OrderedDict((name, tf.get_variable(name, [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
                 embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(2, embeddings)
             if is_training:
@@ -107,11 +107,6 @@ class SupertaggerModel(object):
                 grads = tf.gradients(self.cost, params)
                 grads, _ = tf.clip_by_global_norm(grads, config.max_grad_norm)
                 self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
-
-            with tf.name_scope("initialization"):
-                self.initialize = tf.group(
-                    *[tf.assign(embeddings_w[name], space.embeddings) for name,space in data.embedding_spaces.items()
-                     if isinstance(space, features.PretrainedEmbeddingSpace)])
 
     # Commonly used reshaping operations.
     def flatten(self, x, batch_size, timesteps):

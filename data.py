@@ -11,34 +11,19 @@ from ccgbank import *
 from util import *
 
 class SupertaggerData(object):
-    min_supertag_count = 10
-    min_affix_count = 3
     max_tokens = 100
     batch_size = 32
 
-    def __init__(self):
-        train_sentences, dev_sentences = SupertagReader().get_splits()
-        logging.info("Train sentences: {}".format(len(train_sentences)))
-        logging.info("Dev sentences: {}".format(len(dev_sentences)))
-
-        self.supertag_space = SupertagSpace(train_sentences, min_count=self.min_supertag_count)
-        self.embedding_spaces = collections.OrderedDict(
-            [("words",    WordSpace(maybe_download("data",
-                                                   "http://appositive.cs.washington.edu/resources/",
-                                                   "embeddings.raw"))),
-             ("prefix_1", PrefixSpace(train_sentences, 1, min_count=self.min_affix_count)),
-             ("prefix_2", PrefixSpace(train_sentences, 2, min_count=self.min_affix_count)),
-             ("prefix_3", PrefixSpace(train_sentences, 3, min_count=self.min_affix_count)),
-             ("prefix_4", PrefixSpace(train_sentences, 4, min_count=self.min_affix_count)),
-             ("suffix_1", SuffixSpace(train_sentences, 1, min_count=self.min_affix_count)),
-             ("suffix_2", SuffixSpace(train_sentences, 2, min_count=self.min_affix_count)),
-             ("suffix_3", SuffixSpace(train_sentences, 3, min_count=self.min_affix_count)),
-             ("suffix_4", SuffixSpace(train_sentences, 4, min_count=self.min_affix_count))])
+    def __init__(self, supertag_space, embedding_spaces, train_sentences, dev_sentences):
+        self.supertag_space = supertag_space
+        self.embedding_spaces = embedding_spaces
 
         logging.info("Number of supertags: {}".format(self.supertag_space.size()))
         for name, space in self.embedding_spaces.items():
             logging.info("Number of {}: {}".format(name, space.size()))
 
+        logging.info("Train sentences: {}".format(len(train_sentences)))
+        logging.info("Dev sentences: {}".format(len(dev_sentences)))
         logging.info("Massaging data into training format...")
 
         self.train_data = self.get_data(train_sentences)

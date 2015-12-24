@@ -25,7 +25,13 @@ class SupertaggerTrainer(object):
                 dev_model = SupertaggerModel(config, data, batch_size=data.dev_data[0].shape[0], is_training=False)
 
             session.run(tf.initialize_all_variables())
-            session.run(train_model.initialize)
+
+            with tf.variable_scope("model", reuse=True):
+                for name, space in data.embedding_spaces.items():
+                    if hasattr(space, "embeddings"):
+                        embedding_w = tf.get_variable(name, [space.size(), space.embedding_size])
+                        logging.info("Loading pretrained embeddings for {}".format(name))
+                        session.run(tf.assign(embedding_w, space.embeddings))
 
             with SupertaggerEvaluationContext(session, data.dev_data, dev_model, self.writer) as eval_context:
                 epoch = 0

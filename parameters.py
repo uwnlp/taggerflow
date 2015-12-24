@@ -1,9 +1,10 @@
 import logging
 import collections
+import re
+
+import numpy as np
 
 from features import *
-
-UNKNOWN_MARKER = "*UNKNOWN*"
 
 class ParameterReader(object):
     def readline(self, line):
@@ -13,6 +14,14 @@ class ParameterReader(object):
         raise NotImplementedError("Subclasses must implement this!")
 
 class EmbeddingsReader(ParameterReader):
+    embedding_regexes = {
+        "prefix_(\d)" : lambda g: PrefixSpace(int(g[0])),
+        "suffix_(\d)" : lambda g: SuffixSpace(int(g[0])),
+        "words" : lambda g: WordSpace()
+    }
+
+    unknown_marker = "*UNKNOWN*"
+
     def __init__(self, name):
         self.name = name
         self.words = []
@@ -24,7 +33,7 @@ class EmbeddingsReader(ParameterReader):
         splits = line.split()
         word = splits[0]
 
-        if word == UNKNOWN_MARKER or word == UNKNOWN_MARKER.lower():
+        if word == self.unknown_marker or word == self.unknown_marker.lower():
             if self.default_index is None:
                 self.default_index = i
             else:
@@ -47,7 +56,14 @@ class EmbeddingsReader(ParameterReader):
     def get_result(self):
         if self.default_index is None:
             return ValueError("Unknown word not found.")
-        embedding_space = PretrainedEmbeddingSpace()
+        embedding_space = None
+        for regex, space_function in self.embedding_regexes.items():
+            match = re.match(regex, self.name)
+            if match:
+                embedding_space = space_function(match.groups())
+                break
+        if embedding_space is None:
+            raise ValueError("Unknown embedding space: {}".format(self.name))
         embedding_space.embedding_size = self.embedding_size
         embedding_space.space = self.words
         embedding_space.ispace = collections.defaultdict(lambda:self.default_index, {f:i for i,f in enumerate(self.words)})
@@ -77,32 +93,41 @@ class MatrixReader(ParameterReader):
     def get_result(self):
         if len(self.matrix) != self.dimensions[0]:
             raise ValueError("Expected row size {} but was {}.".format(self.dimensions[0], len(self.matrix)))
-        return self.matrix
+        return np.array(self.matrix)
 
-readers = {
-    "EMBEDDINGS" : EmbeddingsReader,
-    "PARAMETERS" : MatrixReader
-}
+class Parameters:
+    readers = {
+        "EMBEDDINGS" : EmbeddingsReader,
+        "PARAMETERS" : MatrixReader
+    }
 
-def read(filename):
-    current_reader = None
-    offset = 0
-    params = {}
-    with open(filename) as f:
-        for i,line in enumerate(f.readlines()):
-            line = line.strip()
-            if current_reader is None:
-                name_start = line.index("*") + 1
-                name_end = line.index("*", name_start)
-                current_reader = readers[line[name_start:name_end]](line[name_end + 1:].strip())
-                offset = i + 1
-            elif len(line) == 0:
-                params[current_reader.name] = current_reader
-                current_reader = None
-            else:
-                current_reader.readline(i - offset, line)
-    return {k:v.get_result() for k,v in params.items()}
+    param_header_regex = "\*(.*)\*(.*)"
 
-if __name__ == "__main__":
-    params = read("data/parameters")
-    print("Params: {}".format(params.keys()))
+    def __init__(self, embedding_spaces=[]):
+        self.matrices = {}
+        self.embedding_spaces = collections.OrderedDict(embedding_spaces)
+
+    def read(self, filename):
+        current_reader = None
+        offset = 0
+        with open(filename) as f:
+            for i,line in enumerate(f.readlines()):
+                line = line.strip()
+                if current_reader is None:
+                    param_type, name = re.match(self.param_header_regex, line).groups()
+                    name = name.strip().replace(" ", "_").lower()
+                    current_reader = self.readers[param_type](name)
+                    offset = i + 1
+                elif len(line) == 0:
+                    if isinstance(current_reader, EmbeddingsReader):
+                        self.embedding_spaces[current_reader.name] = current_reader.get_result()
+                    elif isinstance(current_reader, MatrixReader):
+                        self.matrices[current_reader.name] = current_reader.get_result()
+                    else:
+                        raise ValueError("Unknown reader type: {}".format(type(current_reader)))
+                    current_reader = None
+                else:
+                    current_reader.readline(i - offset, line)
+
+            logging.info("Loaded pretrained embedding spaces: {}".format(self.embedding_spaces.keys()))
+            logging.info("Loaded pretrained matrices: {}".format(self.matrices.keys()))

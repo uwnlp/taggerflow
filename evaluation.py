@@ -28,7 +28,6 @@ class SupertaggerEvaluationContext(ThreadedContext):
         self.evals_without_improvement = 0
 
     def loop(self):
-        time.sleep(EVAL_FREQUENCY * 60)
         x,y,num_tokens,mask = self.data
         with Timer("Dev evaluation"):
             prediction = self.session.run(self.model.prediction, {
@@ -62,3 +61,5 @@ class SupertaggerEvaluationContext(ThreadedContext):
         summary_values = [tf.Summary.Value(tag="Dev Accuracy", simple_value=accuracy),
                           tf.Summary.Value(tag="Max Dev Accuracy", simple_value=self.best_accuracy)]
         self.writer.add_summary(tf.Summary(value=summary_values), global_step)
+
+        time.sleep(EVAL_FREQUENCY * 60)
