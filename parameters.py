@@ -3,6 +3,7 @@ import collections
 import re
 
 import numpy as np
+import tensorflow as tf
 
 from features import *
 
@@ -131,3 +132,10 @@ class Parameters:
 
             logging.info("Loaded pretrained embedding spaces: {}".format(self.embedding_spaces.keys()))
             logging.info("Loaded pretrained matrices: {}".format(self.matrices.keys()))
+
+    def assign_pretrained(self, session):
+        for name, space in self.embedding_spaces.items():
+            if hasattr(space, "embeddings"):
+                embedding_w = tf.get_variable(name, [space.size(), space.embedding_size])
+                logging.info("Assigning pretrained embeddings for {}".format(embedding_w.name))
+                session.run(tf.assign(embedding_w, space.embeddings))

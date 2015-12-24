@@ -16,7 +16,7 @@ class SupertaggerTrainer(object):
     def __init__(self, logdir):
         self.writer = tf.train.SummaryWriter(logdir, flush_secs=20)
 
-    def train(self, config, data):
+    def train(self, config, data, params):
         with tf.Session() as session, Timer("Training") as timer:
             with tf.variable_scope("model", initializer=custom_init_ops.dyer_initializer()):
                 train_model = SupertaggerModel(config, data, batch_size=data.batch_size, is_training=True)
@@ -27,11 +27,7 @@ class SupertaggerTrainer(object):
             session.run(tf.initialize_all_variables())
 
             with tf.variable_scope("model", reuse=True):
-                for name, space in data.embedding_spaces.items():
-                    if hasattr(space, "embeddings"):
-                        embedding_w = tf.get_variable(name, [space.size(), space.embedding_size])
-                        logging.info("Loading pretrained embeddings for {}".format(name))
-                        session.run(tf.assign(embedding_w, space.embeddings))
+                params.assign_pretrained(session)
 
             with SupertaggerEvaluationContext(session, data.dev_data, dev_model, self.writer) as eval_context:
                 epoch = 0

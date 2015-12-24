@@ -72,4 +72,4 @@ if __name__ == "__main__":
             stream_handler.setFormatter(logging.Formatter("{} - %(message)s".format(config.name)))
             with tf.Graph().as_default():
                 trainer = SupertaggerTrainer(run_logdir)
-                trainer.train(config, data)
+                trainer.train(config, data, parameters)
