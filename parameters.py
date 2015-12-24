@@ -190,11 +190,13 @@ class Parameters:
                 unassigned_variables.remove(variable.name)
                 session.run(tf.assign(variable, space.embeddings))
 
-        for name, matrix_names in self.variable_mapping.items():
-            concat = np.concatenate([self.matrices[n] for n in matrix_names])
-            variable = tf.get_variable(name, concat.shape)
-            logging.info("Assigning pretrained matrix for {}.".format(variable.name))
-            unassigned_variables.remove(variable.name)
-            session.run(tf.assign(variable, concat))
+        # TODO: do this the right way...
+        if len(self.matrices) != 0:
+            for name, matrix_names in self.variable_mapping.items():
+                concat = np.concatenate([self.matrices[n] for n in matrix_names])
+                variable = tf.get_variable(name, concat.shape)
+                logging.info("Assigning pretrained matrix for {}.".format(variable.name))
+                unassigned_variables.remove(variable.name)
+                session.run(tf.assign(variable, concat))
 
         logging.info("Remaining unassigned variables: {}".format(unassigned_variables))
