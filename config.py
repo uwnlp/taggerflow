@@ -12,6 +12,7 @@ class SupertaggerConfig(object):
         self.max_grad_norm = hyperparams["max_grad_norm"]
         self.regularization = hyperparams["regularization"]
         self.dropout_probability = hyperparams["dropout_probability"]
+        self.ccgbank_weight = hyperparams["ccgbank_weight"]
 
         shortened_hyperparams = { self.shorten(k):v for k,v in hyperparams.items() if k in varying_keys}
         if len(shortened_hyperparams) != len(varying_keys):

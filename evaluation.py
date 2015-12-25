@@ -28,7 +28,7 @@ class SupertaggerEvaluationContext(ThreadedContext):
         self.evals_without_improvement = 0
 
     def loop(self):
-        x,y,num_tokens,mask = self.data
+        x,y,num_tokens,is_tritrain,weights = self.data
         with Timer("Dev evaluation"):
             prediction = self.session.run(self.model.prediction, {
                 self.model.x: x,
@@ -37,7 +37,7 @@ class SupertaggerEvaluationContext(ThreadedContext):
         num_correct = 0
         for i,n in enumerate(num_tokens):
             num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n) if y[i,j] >= 0)
-        num_total = np.sum(mask)
+        num_total = np.sum(weights)
         accuracy = (100.0 * num_correct)/num_total
         global_step = tf.train.global_step(self.session, self.model.global_step)
 

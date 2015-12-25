@@ -13,6 +13,7 @@ import custom_rnn_cell
 
 class SupertaggerModel(object):
 
+
     def __init__(self, config, data, batch_size, is_training):
         self.config = config
 
@@ -27,7 +28,8 @@ class SupertaggerModel(object):
             self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
             if is_training:
                 self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
-                self.mask = tf.placeholder(tf.float32, [batch_size, max_tokens], name="mask")
+                self.tritrain = tf.placeholder(tf.float32, [batch_size], name="tritrain")
+                self.weights = tf.placeholder(tf.float32, [batch_size, max_tokens], name="weights")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"):
@@ -46,7 +48,6 @@ class SupertaggerModel(object):
                 cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (config.num_layers - 1))
             else:
                 cell = first_cell
-
 
             # Split into LSTM inputs.
             inputs = tf.split(1, max_tokens, concat_embedding)
@@ -84,10 +85,12 @@ class SupertaggerModel(object):
 
         if is_training:
             with tf.name_scope("loss"):
+                modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 1)
+
                 # Cross-entropy loss.
                 self.loss = seq2seq.sequence_loss([softmax],
                                                   [self.flatten(self.y, batch_size, max_tokens)],
-                                                  [self.flatten(self.mask, batch_size, max_tokens)],
+                                                  [self.flatten(modified_weights, batch_size, max_tokens)],
                                                   supertags_size,
                                                   average_across_timesteps=False)
 
