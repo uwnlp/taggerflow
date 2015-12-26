@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("-g", "--gpu", help="specify gpu devices to use")
     parser.add_argument("-l", "--logdir", help="directory to contain logs", default="logs")
     parser.add_argument("-p", "--params", help="pretrained parameter file")
+    parser.add_argument("-d", "--debug", help="debug mode that runs on tiny subset", action="store_true")
     args = parser.parse_args()
 
     if args.gpu is not None:
@@ -53,6 +54,10 @@ if __name__ == "__main__":
 
     with LoggingToFile(exp_logdir, "init.log"):
         train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits()
+        if args.debug:
+            train_sentences = train_sentences[:10]
+            tritrain_sentences = tritrain_sentences[:10]
+            dev_sentences = dev_sentences[:10]
 
         supertag_space = SupertagSpace(maybe_download("data",
                                                       "http://appositive.cs.washington.edu/resources/",
