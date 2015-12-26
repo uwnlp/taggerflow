@@ -13,6 +13,8 @@ from util import *
 class SupertaggerData(object):
     max_tokens = 100
     batch_size = 512
+    bucket_size = 5
+    max_tritrain_length = 70
 
     def __init__(self, supertag_space, embedding_spaces, train_sentences, tritrain_sentences, dev_sentences):
         self.supertag_space = supertag_space
@@ -25,13 +27,38 @@ class SupertaggerData(object):
         logging.info("Train sentences: {}".format(len(train_sentences)))
         logging.info("Tri-train sentences: {}".format(len(tritrain_sentences)))
         logging.info("Dev sentences: {}".format(len(dev_sentences)))
-        logging.info("Massaging data into training format...")
 
+        train_distribution = self.get_sentence_length_distribution(train_sentences)
+        tritrain_distribution = self.get_sentence_length_distribution(tritrain_sentences)
+
+        logging.info("Train distribution: {}".format(self.format_distribution(train_distribution)))
+        logging.info("Tri-train distribution: {}".format(self.format_distribution(tritrain_distribution)))
+
+        self.distribution_ratios = [t/tt if tt > 0.0 else 0.0 for t,tt in zip(train_distribution, tritrain_distribution)]
+        self.tritrain_ratio = len(train_sentences)/float(len(tritrain_sentences))
+
+        logging.info("Distribution ratios: {}".format(self.format_distribution(self.distribution_ratios)))
+        logging.info("Train to tri-train ratio: {:.5f}".format(self.tritrain_ratio))
+
+        logging.info("Massaging data into training format...")
         self.train_data = self.get_data(train_sentences + tritrain_sentences)
         self.dev_data = self.get_data(dev_sentences)
 
         logging.info("Train batches: {}".format(self.train_data[0].shape[0] / self.batch_size))
         logging.info("Dev batches: {}".format(self.dev_data[0].shape[0] / self.batch_size))
+
+    def format_distribution(self, distribution):
+        return ",".join("{:.5f}".format(p) for p in distribution)
+
+    def get_bucket(self, sentence_length):
+        # Don't count <s> and </s>.
+        return abs(sentence_length - 1 - 2)/self.bucket_size
+
+    def get_sentence_length_distribution(self, sentences):
+        counts = collections.Counter((self.get_bucket(len(s[0])) for s in sentences))
+        buckets = [counts[i] for i in range(self.max_tritrain_length/self.bucket_size)]
+        buckets_sum = float(sum(buckets))
+        return [b/buckets_sum for b in buckets]
 
     def get_embedding_indexes(self, token):
         return [space.index(space.extract(token)) for space in self.embedding_spaces.values()]
@@ -85,16 +112,7 @@ class SupertaggerData(object):
             # Labels with negative indices should have 0 weight.
             data_weights[i,:len(y)] = [int(y_val >= 0) for y_val in y]
             if is_tritrain:
-                # Don't count start and end tokens.
-                data_weights[i,:len(y)] /= get_tritrain_ratio(len(x) - 2)
+                # Tri-training data is weighted so that the sentence length distribution and the number of sentences match the training data.
+                data_weights[i,:len(y)] *= self.distribution_ratios[self.get_bucket(len(x))] * self.tritrain_ratio
 
         return (data_x, data_y, data_num_tokens, data_tritrain, data_weights)
-
-
-TRITRAIN_RATIOS = [187.76, 160.57, 106.77, 79.15, 51.93, 35.34, 24.60, 19.26, 13.99, 10.40, 9.31, 6.29, 5.54, 3.14]
-mean = sum(TRITRAIN_RATIOS)/len(TRITRAIN_RATIOS)
-TRITRAIN_RATIOS = [r/mean for r in  TRITRAIN_RATIOS]
-
-def get_tritrain_ratio(sentence_length):
-    bucket = abs(sentence_length - 1)/5
-    return TRITRAIN_RATIOS[bucket]
