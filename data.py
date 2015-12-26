@@ -92,6 +92,8 @@ class SupertaggerData(object):
 
 
 TRITRAIN_RATIOS = [187.76, 160.57, 106.77, 79.15, 51.93, 35.34, 24.60, 19.26, 13.99, 10.40, 9.31, 6.29, 5.54, 3.14]
+mean = sum(TRITRAIN_RATIOS)/len(TRITRAIN_RATIOS)
+TRITRAIN_RATIOS = [r/mean for r in  TRITRAIN_RATIOS]
 
 def get_tritrain_ratio(sentence_length):
     bucket = abs(sentence_length - 1)/5

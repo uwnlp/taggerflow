@@ -95,7 +95,10 @@ class SupertaggerModel(object):
                                                   average_across_timesteps=False)
 
                 params = tf.trainable_variables()
-                self.regularization = self.config.regularization * sum(tf.nn.l2_loss(p) for p in params)
+                if self.config.regularization > 0.0:
+                    self.regularization = self.config.regularization * sum(tf.nn.l2_loss(p) for p in params)
+                else:
+                    self.regularization = tf.constant(0.0)
                 self.cost = self.loss + self.regularization
 
             # Construct training operations.
