@@ -12,7 +12,7 @@ from util import *
 
 class SupertaggerData(object):
     max_tokens = 100
-    batch_size = 512
+    batch_size = 1024
     bucket_size = 5
     max_tritrain_length = 70
 
@@ -35,17 +35,16 @@ class SupertaggerData(object):
         logging.info("Tri-train distribution: {}".format(self.format_distribution(tritrain_distribution)))
 
         self.distribution_ratios = [t/tt if tt > 0.0 else 0.0 for t,tt in zip(train_distribution, tritrain_distribution)]
-        self.tritrain_ratio = len(train_sentences)/float(len(tritrain_sentences))
+        self.tritrain_ratio = float(len(tritrain_sentences))/len(train_sentences)
 
         logging.info("Distribution ratios: {}".format(self.format_distribution(self.distribution_ratios)))
-        logging.info("Train to tri-train ratio: {:.5f}".format(self.tritrain_ratio))
+        logging.info("Tri-train to train ratio: {:.5f}".format(self.tritrain_ratio))
 
         logging.info("Massaging data into training format...")
-        self.train_data = self.get_data(train_sentences + tritrain_sentences)
-        self.dev_data = self.get_data(dev_sentences)
+        self.train_data = self.get_data(train_sentences + tritrain_sentences, False)
+        self.dev_data = self.get_data(dev_sentences, True)
 
         logging.info("Train batches: {}".format(self.train_data[0].shape[0] / self.batch_size))
-        logging.info("Dev batches: {}".format(self.dev_data[0].shape[0] / self.batch_size))
 
     def format_distribution(self, distribution):
         return ",".join("{:.5f}".format(p) for p in distribution)
@@ -82,7 +81,7 @@ class SupertaggerData(object):
                             data_weights[batch_indexes,:]))
         return batches
 
-    def get_data(self, sentences):
+    def get_data(self, sentences, is_dev):
         sentences = [([self.get_embedding_indexes(t) for t in tokens], [self.supertag_space.index(s) for s in supertags], is_tritrain) for tokens,supertags,is_tritrain in sentences]
 
         # Make the data size divisible by the batch size.
@@ -111,8 +110,13 @@ class SupertaggerData(object):
 
             # Labels with negative indices should have 0 weight.
             data_weights[i,:len(y)] = [int(y_val >= 0) for y_val in y]
-            if is_tritrain:
-                # Tri-training data is weighted so that the sentence length distribution and the number of sentences match the training data.
-                data_weights[i,:len(y)] *= self.distribution_ratios[self.get_bucket(len(x))] * self.tritrain_ratio
+            if not is_dev:
+                if is_tritrain:
+                    # Tri-training data is weighted so that the sentence length distribution matches the training data.
+                    data_weights[i,:len(y)] *= self.distribution_ratios[self.get_bucket(len(x))]
+                else:
+                    # Weight the original training data so they match the size of the tri-training set.
+                    # This can be further controlled by the ccgbank_weight configuration.
+                    data_weights[i,:len(y)] *= self.tritrain_ratio
 
         return (data_x, data_y, data_num_tokens, data_tritrain, data_weights)
