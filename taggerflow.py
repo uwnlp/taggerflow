@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 import os
 import argparse
 import logging
@@ -37,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--logdir", help="directory to contain logs", default="logs")
     parser.add_argument("-p", "--params", help="pretrained parameter file")
     parser.add_argument("-d", "--debug", help="debug mode that runs on tiny subset", action="store_true")
+    parser.add_argument("-c", "--checkpoint_dir", help="recover checkpoint and evaluate")
     args = parser.parse_args()
 
     if args.gpu is not None:
@@ -53,22 +55,34 @@ if __name__ == "__main__":
         os.makedirs(exp_logdir)
 
     with LoggingToFile(exp_logdir, "init.log"):
-        train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits()
-        if args.debug:
-            train_sentences = train_sentences[:10]
-            tritrain_sentences = tritrain_sentences[:10]
-            dev_sentences = dev_sentences[:10]
-
         supertag_space = SupertagSpace(maybe_download("data",
                                                       "http://appositive.cs.washington.edu/resources/",
                                                       "categories"))
+        train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits(args.debug or args.checkpoint_dir is not None)
+
         if args.params is None:
             parameters = get_default_parameters(train_sentences)
         else:
             parameters = get_pretrained_parameters(args.params)
         data = SupertaggerData(supertag_space, parameters.embedding_spaces, train_sentences, tritrain_sentences, dev_sentences)
-        configs = expand_grid(args.grid)
 
+    if args.checkpoint_dir is not None:
+        with tf.Session() as session:
+            with tf.variable_scope("model"):
+                model = SupertaggerModel(None, data, batch_size=data.dev_data[0].shape[0], is_training=False)
+            saver = tf.train.Saver(tf.trainable_variables())
+            checkpoint = tf.train.get_checkpoint_state(args.checkpoint_dir)
+            if checkpoint and checkpoint.model_checkpoint_path:
+                print("Restoring from: {}".format(checkpoint.model_checkpoint_path))
+                saver.restore(session, checkpoint.model_checkpoint_path)
+            else:
+                raise ValueError("No checkpoint file found.")
+            # The global step should be the only uninitialized variable.
+            session.run(tf.initialize_variables([model.global_step]))
+            evaluate_supertagger(session, data.dev_data, model)
+        sys.exit(0)
+
+    configs = expand_grid(args.grid)
     for config in configs:
         run_logdir = os.path.join(exp_logdir, config.name)
         if not os.path.exists(run_logdir):

@@ -12,7 +12,9 @@ import features
 import custom_rnn_cell
 
 class SupertaggerModel(object):
-
+    lstm_hidden_size = 128
+    penultimate_hidden_size = 64
+    num_layers = 2
 
     def __init__(self, config, data, batch_size, is_training):
         self.config = config
@@ -36,16 +38,16 @@ class SupertaggerModel(object):
             with tf.device("/cpu:0"):
                 embeddings_w = collections.OrderedDict((name, tf.get_variable(name, [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
                 embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
-            concat_embedding = tf.concat(2, embeddings)
+                concat_embedding = tf.concat(2, embeddings)
             if is_training:
                 concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - config.dropout_probability)
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
-            first_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, concat_embedding.get_shape()[2].value)
-            stacked_cell = custom_rnn_cell.DyerLSTMCell(config.lstm_hidden_size, config.lstm_hidden_size)
-            if config.num_layers > 1:
-                cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (config.num_layers - 1))
+            first_cell = custom_rnn_cell.DyerLSTMCell(self.lstm_hidden_size, concat_embedding.get_shape()[2].value)
+            stacked_cell = custom_rnn_cell.DyerLSTMCell(self.lstm_hidden_size, self.lstm_hidden_size)
+            if self.num_layers > 1:
+                cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (self.num_layers - 1))
             else:
                 cell = first_cell
 
@@ -63,17 +65,13 @@ class SupertaggerModel(object):
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
             flattened = self.flatten(outputs, batch_size, max_tokens)
-            penultimate = rnn_cell.linear(flattened, config.penultimate_hidden_size, True, scope="penultimate")
+            penultimate = rnn_cell.linear(flattened, self.penultimate_hidden_size, True, scope="penultimate")
             name_to_nonlinearity = {
                 "tanh" : tf.tanh,
                 "relu" : tf.nn.relu,
                 "relu6" : tf.nn.relu6
             }
-
-            if config.penultimate_nonlinearity in name_to_nonlinearity:
-                penultimate = name_to_nonlinearity[config.penultimate_nonlinearity](penultimate)
-            else:
-                raise ValueError("Unknown nonlinearity: {}".format(config.penultimate_nonlinearity))
+            penultimate = tf.nn.relu(penultimate)
             softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
 
         with tf.name_scope("prediction"):

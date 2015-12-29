@@ -5,10 +5,6 @@ class SupertaggerConfig(object):
 
     def __init__(self, hyperparams, varying_keys):
         # Save as member variables for convenience.
-        self.lstm_hidden_size = hyperparams["lstm_hidden_size"]
-        self.penultimate_hidden_size = hyperparams["penultimate_hidden_size"]
-        self.penultimate_nonlinearity = hyperparams["penultimate_nonlinearity"]
-        self.num_layers = hyperparams["num_layers"]
         self.max_grad_norm = hyperparams["max_grad_norm"]
         self.regularization = hyperparams["regularization"]
         self.dropout_probability = hyperparams["dropout_probability"]

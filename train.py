@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import os
 import logging
 
@@ -12,8 +11,8 @@ from model import *
 from config import *
 
 class SupertaggerTrainer(object):
-
     def __init__(self, logdir):
+        self.logdir = logdir
         self.writer = tf.train.SummaryWriter(logdir, flush_secs=20)
 
     def train(self, config, data, params):
@@ -29,7 +28,7 @@ class SupertaggerTrainer(object):
             with tf.variable_scope("model", reuse=True):
                 params.assign_pretrained(session)
 
-            with SupertaggerEvaluationContext(session, data.dev_data, dev_model, self.writer) as eval_context:
+            with SupertaggerEvaluationContext(session, data.dev_data, dev_model, self.writer, self.logdir) as eval_context:
                 epoch = 0
                 train_batches = data.get_batches(data.train_data)
                 while not eval_context.stop:
