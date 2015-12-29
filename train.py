@@ -35,7 +35,7 @@ class SupertaggerTrainer(object):
                     logging.info("========= Epoch {:02d} =========".format(epoch))
                     train_cost = 0.0
                     train_reg = 0.0
-                    for i,(x,y,num_tokens,is_tritrain,weights) in enumerate(train_batches):
+                    for i,(tokens,x,y,num_tokens,is_tritrain,weights) in enumerate(train_batches):
                         if eval_context.stop:
                             break
                         _, cost, reg = session.run([train_model.optimize, train_model.cost, train_model.regularization], {

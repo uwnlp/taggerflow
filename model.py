@@ -1,5 +1,4 @@
 import collections
-
 import numpy as np
 import tensorflow as tf
 
@@ -65,19 +64,13 @@ class SupertaggerModel(object):
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
             flattened = self.flatten(outputs, batch_size, max_tokens)
-            penultimate = rnn_cell.linear(flattened, self.penultimate_hidden_size, True, scope="penultimate")
-            name_to_nonlinearity = {
-                "tanh" : tf.tanh,
-                "relu" : tf.nn.relu,
-                "relu6" : tf.nn.relu6
-            }
-            penultimate = tf.nn.relu(penultimate)
+            penultimate = tf.nn.relu(rnn_cell.linear(flattened, self.penultimate_hidden_size, True, scope="penultimate"))
             softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
 
         with tf.name_scope("prediction"):
             # Predictions are the indexes with the highest value from the softmax layer.
             self.prediction = tf.argmax(self.unflatten(softmax, batch_size, max_tokens), 2)
-
+            self.probabilities = self.unflatten(tf.nn.softmax(softmax), batch_size, max_tokens)
         # Keep this even when we're not training so the dev model knows how many steps have been taken.
         self.global_step = tf.get_variable("global_step", [], trainable=False, initializer=tf.constant_initializer(0))
 

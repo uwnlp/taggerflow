@@ -16,19 +16,36 @@ GRACE_PERIOD = 60
 # Run basically forever.
 #GRACE_PERIOD = 10000
 
+def output_supertagger(session, data, model, supertag_space, pstagged_file):
+    tokens,x,y,num_tokens,is_tritrain,weights = data
+    with Timer("Dev evaluation"):
+        probabilities = session.run(model.probabilities, {
+            model.x: x,
+            model.num_tokens: num_tokens
+        })
+    num_correct = np.sum(np.equal(np.argmax(probabilities,2), y)[y >= 0])
+    num_total = np.sum(weights)
+    accuracy = (100.0 * num_correct)/num_total
+    logging.info("Accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
+
+    with open(pstagged_file, "w") as f:
+        for i,n in enumerate(num_tokens):
+            for t,p in zip(tokens[i,1:n-1], probabilities[i,1:n-1,:]):
+                max_p = max(p)
+                unpruned = np.nonzero(np.divide(p,max_p) > 1e-6)[0]
+                f.write("{}|{}\n".format(t, "|".join("{}={}".format(supertag_space.feature(j),p[j]) for j in unpruned)))
+            f.write("\n")
+
 def evaluate_supertagger(session, data, model):
-    x,y,num_tokens,is_tritrain,weights = data
+    tokens,x,y,num_tokens,is_tritrain,weights = data
     with Timer("Dev evaluation"):
         prediction = session.run(model.prediction, {
             model.x: x,
             model.num_tokens: num_tokens
         })
-    num_correct = 0
-    for i,n in enumerate(num_tokens):
-        num_correct += sum(int(prediction[i,j] == y[i,j]) for j in range(n) if y[i,j] >= 0)
+    num_correct = np.sum(np.equal(prediction, y)[y >= 0])
     num_total = np.sum(weights)
     accuracy = (100.0 * num_correct)/num_total
-    global_step = tf.train.global_step(session, model.global_step)
     logging.info("Dev accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
     return accuracy
 

@@ -63,7 +63,7 @@ class SupertaggerData(object):
         return [space.index(space.extract(token)) for space in self.embedding_spaces.values()]
 
     def get_batches(self, data):
-        data_x, data_y, data_num_tokens, data_tritrain, data_weights = data
+        data_tokens, data_x, data_y, data_num_tokens, data_tritrain, data_weights = data
         batch_size = self.batch_size
         data_size = data_x.shape[0]
         if data_size % batch_size != 0:
@@ -74,7 +74,8 @@ class SupertaggerData(object):
         batches = []
         for i in range(data_size / batch_size):
             batch_indexes = indexes[i * batch_size: (i + 1) * batch_size]
-            batches.append((data_x[batch_indexes,:,:],
+            batches.append((data_tokens[batch_indexes,:],
+                            data_x[batch_indexes,:,:],
                             data_y[batch_indexes,:],
                             data_num_tokens[batch_indexes],
                             data_tritrain[batch_indexes],
@@ -82,22 +83,27 @@ class SupertaggerData(object):
         return batches
 
     def get_data(self, sentences, is_dev):
-        sentences = [([self.get_embedding_indexes(t) for t in tokens], [self.supertag_space.index(s) for s in supertags], is_tritrain) for tokens,supertags,is_tritrain in sentences]
-
         # Make the data size divisible by the batch size.
         data_size = int(self.batch_size * math.ceil(len(sentences)/float(self.batch_size)))
+
+        data_tokens = np.empty([data_size, self.max_tokens], dtype=object)
         data_x = np.zeros([data_size, self.max_tokens, len(self.embedding_spaces)], dtype=np.int32)
         data_y = np.zeros([data_size, self.max_tokens], dtype=np.int32)
         data_num_tokens = np.zeros([data_size], dtype=np.int64)
         data_tritrain = np.zeros([data_size], dtype=np.float32)
         data_weights = np.zeros([data_size, self.max_tokens], dtype=np.float32)
 
-        for i,(x,y,is_tritrain) in enumerate(sentences):
-            if len(x) != len(y):
-                raise ValueError("Number of tokens ({}) should match number of supertags ({}).".format(len(x), len(y)))
-            if len(x) > self.max_tokens:
-                logging.info("Skipping sentence of length {}.".format(len(x)))
+        for i,(tokens,supertags,is_tritrain) in enumerate(sentences):
+            if len(tokens) != len(supertags):
+                raise ValueError("Number of tokens ({}) should match number of supertags ({}).".format(len(tokens), len(supertags)))
+            if len(tokens) > self.max_tokens:
+                logging.info("Skipping sentence of length {}.".format(len(tokens)))
                 continue
+
+            data_tokens[i,:len(tokens)] = tokens
+
+            x = [self.get_embedding_indexes(t) for t in tokens]
+            y = [self.supertag_space.index(s) for s in supertags]
 
             data_x[i,:len(x):] = x
 
@@ -119,4 +125,4 @@ class SupertaggerData(object):
                     # This can be further controlled by the ccgbank_weight configuration.
                     data_weights[i,:len(y)] *= self.tritrain_ratio
 
-        return (data_x, data_y, data_num_tokens, data_tritrain, data_weights)
+        return (data_tokens, data_x, data_y, data_num_tokens, data_tritrain, data_weights)

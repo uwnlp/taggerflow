@@ -79,7 +79,7 @@ if __name__ == "__main__":
                 raise ValueError("No checkpoint file found.")
             # The global step should be the only uninitialized variable.
             session.run(tf.initialize_variables([model.global_step]))
-            evaluate_supertagger(session, data.dev_data, model)
+            output_supertagger(session, data.dev_data, model, supertag_space, os.path.join(exp_logdir, "output.pstagged"))
         sys.exit(0)
 
     configs = expand_grid(args.grid)
