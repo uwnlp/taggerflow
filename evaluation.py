@@ -1,6 +1,7 @@
 import time
 import logging
 import os
+import math
 
 import numpy as np
 import tensorflow as tf
@@ -11,10 +12,10 @@ from util import *
 EVAL_FREQUENCY = 2
 
 # Allow the model 30 chances and about 60 minutes to improve.
-GRACE_PERIOD = 60
+#GRACE_PERIOD = 60
 
 # Run basically forever.
-#GRACE_PERIOD = 10000
+GRACE_PERIOD = 10000
 
 def output_supertagger(session, data, model, supertag_space, pstagged_file):
     tokens,x,y,num_tokens,is_tritrain,weights = data
@@ -33,7 +34,7 @@ def output_supertagger(session, data, model, supertag_space, pstagged_file):
             for t,p in zip(tokens[i,1:n-1], probabilities[i,1:n-1,:]):
                 max_p = max(p)
                 unpruned = np.nonzero(np.divide(p,max_p) > 1e-6)[0]
-                f.write("{}|{}\n".format(t, "|".join("{}={}".format(supertag_space.feature(j),p[j]) for j in unpruned)))
+                f.write("{}|{}\n".format(t, "|".join("{}={:.2f}".format(j,math.log(p[j])) for j in unpruned)))
             f.write("\n")
 
 def evaluate_supertagger(session, data, model):
