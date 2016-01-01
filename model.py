@@ -8,34 +8,36 @@ from tensorflow.python.ops import seq2seq
 
 import logging
 import features
-import custom_rnn_cell
+
+from custom_rnn_cell import *
 
 class SupertaggerModel(object):
     lstm_hidden_size = 128
     penultimate_hidden_size = 64
     num_layers = 2
 
-    def __init__(self, config, data, batch_size, is_training):
+    # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
+    def __init__(self, config, data, is_training, freeze=False):
         self.config = config
 
         # Redeclare some variables for convenience.
         supertags_size = data.supertag_space.size()
         embedding_spaces = data.embedding_spaces
-        max_tokens = data.max_tokens
+        self.max_tokens = max_tokens = data.max_tokens
 
         with tf.name_scope("inputs"):
             # Each training step is batched with a maximum length.
-            self.x = tf.placeholder(tf.int32, [batch_size, max_tokens, len(embedding_spaces)], name="x")
-            self.num_tokens = tf.placeholder(tf.int64, [batch_size], name="num_tokens")
+            self.x = tf.placeholder(tf.int32, [None, max_tokens, len(embedding_spaces)], name="x")
+            self.num_tokens = tf.placeholder(tf.int64, [None], name="num_tokens")
             if is_training:
-                self.y = tf.placeholder(tf.int32, [batch_size, max_tokens], name="y")
-                self.tritrain = tf.placeholder(tf.float32, [batch_size], name="tritrain")
-                self.weights = tf.placeholder(tf.float32, [batch_size, max_tokens], name="weights")
+                self.y = tf.placeholder(tf.int32, [None, max_tokens], name="y")
+                self.tritrain = tf.placeholder(tf.float32, [None], name="tritrain")
+                self.weights = tf.placeholder(tf.float32, [None, max_tokens], name="weights")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"):
             with tf.device("/cpu:0"):
-                embeddings_w = collections.OrderedDict((name, tf.get_variable(name, [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
+                embeddings_w = collections.OrderedDict((name, maybe_get_variable(name, [space.size(), space.embedding_size], freeze=freeze)) for name, space in embedding_spaces.items())
                 embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
                 concat_embedding = tf.concat(2, embeddings)
             if is_training:
@@ -43,8 +45,8 @@ class SupertaggerModel(object):
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
-            first_cell = custom_rnn_cell.DyerLSTMCell(self.lstm_hidden_size, concat_embedding.get_shape()[2].value)
-            stacked_cell = custom_rnn_cell.DyerLSTMCell(self.lstm_hidden_size, self.lstm_hidden_size)
+            first_cell = DyerLSTMCell(self.lstm_hidden_size, concat_embedding.get_shape()[2].value, freeze=freeze)
+            stacked_cell = DyerLSTMCell(self.lstm_hidden_size, self.lstm_hidden_size, freeze=freeze)
             if self.num_layers > 1:
                 cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (self.num_layers - 1))
             else:
@@ -63,16 +65,14 @@ class SupertaggerModel(object):
 
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
-            flattened = self.flatten(outputs, batch_size, max_tokens)
-            penultimate = tf.nn.relu(rnn_cell.linear(flattened, self.penultimate_hidden_size, True, scope="penultimate"))
-            softmax = rnn_cell.linear(penultimate, supertags_size, True, scope="softmax")
+            flattened = self.flatten(outputs)
+            penultimate = tf.nn.relu(linear(flattened, self.penultimate_hidden_size, "penultimate", freeze=freeze))
+            softmax = linear(penultimate, supertags_size, "softmax", freeze=freeze)
 
         with tf.name_scope("prediction"):
             # Predictions are the indexes with the highest value from the softmax layer.
-            self.prediction = tf.argmax(self.unflatten(softmax, batch_size, max_tokens), 2)
-            self.probabilities = self.unflatten(tf.nn.softmax(softmax), batch_size, max_tokens)
-        # Keep this even when we're not training so the dev model knows how many steps have been taken.
-        self.global_step = tf.get_variable("global_step", [], trainable=False, initializer=tf.constant_initializer(0))
+            self.prediction = tf.argmax(self.unflatten(softmax), 2, name="prediction")
+            self.probabilities = self.unflatten(tf.nn.softmax(softmax), name="probabilities")
 
         if is_training:
             with tf.name_scope("loss"):
@@ -80,8 +80,8 @@ class SupertaggerModel(object):
 
                 # Cross-entropy loss.
                 self.loss = seq2seq.sequence_loss([softmax],
-                                                  [self.flatten(self.y, batch_size, max_tokens)],
-                                                  [self.flatten(modified_weights, batch_size, max_tokens)],
+                                                  [self.flatten(self.y)],
+                                                  [self.flatten(modified_weights)],
                                                   supertags_size,
                                                   average_across_timesteps=False)
 
@@ -94,19 +94,20 @@ class SupertaggerModel(object):
 
             # Construct training operations.
             with tf.name_scope("training"):
+                self.global_step = tf.get_variable("global_step", [], trainable=False, initializer=tf.constant_initializer(0))
                 optimizer = tf.train.AdamOptimizer()
                 grads = tf.gradients(self.cost, params)
                 grads, _ = tf.clip_by_global_norm(grads, config.max_grad_norm)
                 self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
 
     # Commonly used reshaping operations.
-    def flatten(self, x, batch_size, timesteps):
+    def flatten(self, x):
         if len(x.get_shape()) == 2:
-            return tf.reshape(x, [batch_size * timesteps])
+            return tf.reshape(x, [-1])
         elif len(x.get_shape()) == 3:
-            return tf.reshape(x, [batch_size * timesteps, x.get_shape()[2].value])
+            return tf.reshape(x, [-1, x.get_shape()[2].value])
         else:
             raise ValueError("Unsupported shape: {}".format(x.get_shape()))
 
-    def unflatten(self, flattened, batch_size, timesteps):
-        return tf.reshape(flattened, [batch_size, timesteps, -1])
+    def unflatten(self, flattened, name=None):
+        return tf.reshape(flattened, [-1, self.max_tokens, flattened.get_shape()[1].value], name=name)

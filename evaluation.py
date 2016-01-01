@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 
 from util import *
+from model import *
 
 # Evaluate every 2 minutes.
 EVAL_FREQUENCY = 2
@@ -17,7 +18,7 @@ EVAL_FREQUENCY = 2
 # Run basically forever.
 GRACE_PERIOD = 10000
 
-def output_supertagger(session, data, model, supertag_space, pstagged_file):
+def output_supertagger(session, data, model, supertag_space, logdir, pstagged_file):
     tokens,x,y,num_tokens,is_tritrain,weights = data
     with Timer("Dev evaluation"):
         probabilities = session.run(model.probabilities, {
@@ -29,12 +30,12 @@ def output_supertagger(session, data, model, supertag_space, pstagged_file):
     accuracy = (100.0 * num_correct)/num_total
     logging.info("Accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
 
-    with open(pstagged_file, "w") as f:
+    with open(os.path.join(logdir, pstagged_file), "w") as f:
         for i,n in enumerate(num_tokens):
             for t,p in zip(tokens[i,1:n-1], probabilities[i,1:n-1,:]):
                 max_p = max(p)
                 unpruned = np.nonzero(np.divide(p,max_p) > 1e-6)[0]
-                f.write("{}|{}\n".format(t, "|".join("{}={:.2f}".format(j,math.log(p[j])) for j in unpruned)))
+                f.write("{}|{}\n".format(t, "|".join("{}={:.3f}".format(j,math.log(p[j])) for j in unpruned)))
             f.write("\n")
 
 def evaluate_supertagger(session, data, model):
@@ -51,11 +52,12 @@ def evaluate_supertagger(session, data, model):
     return accuracy
 
 class SupertaggerEvaluationContext(ThreadedContext):
-    def __init__(self, session, data, model, writer, logdir):
+    def __init__(self, session, data, model, global_step, writer, logdir):
         super(SupertaggerEvaluationContext, self).__init__()
         self.session = session
         self.data = data
         self.model = model
+        self.global_step = global_step
         self.writer = writer
         self.logdir = logdir
         self.saver = tf.train.Saver(tf.trainable_variables())
@@ -63,7 +65,7 @@ class SupertaggerEvaluationContext(ThreadedContext):
         self.evals_without_improvement = 0
 
     def loop(self):
-        global_step = tf.train.global_step(self.session, self.model.global_step)
+        global_step = tf.train.global_step(self.session, self.global_step)
         logging.info("----------------------------")
         logging.info("Evaluating at step {}.".format(global_step))
         accuracy = evaluate_supertagger(self.session, self.data, self.model)

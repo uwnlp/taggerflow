@@ -67,9 +67,10 @@ if __name__ == "__main__":
         data = SupertaggerData(supertag_space, parameters.embedding_spaces, train_sentences, tritrain_sentences, dev_sentences)
 
     if args.checkpoint_dir is not None:
-        with tf.Session() as session:
+        g = tf.Graph()
+        with g.as_default(), tf.Session() as session:
             with tf.variable_scope("model"):
-                model = SupertaggerModel(None, data, batch_size=data.dev_data[0].shape[0], is_training=False)
+                model = SupertaggerModel(None, data, is_training=False)
             saver = tf.train.Saver(tf.trainable_variables())
             checkpoint = tf.train.get_checkpoint_state(args.checkpoint_dir)
             if checkpoint and checkpoint.model_checkpoint_path:
@@ -77,9 +78,13 @@ if __name__ == "__main__":
                 saver.restore(session, checkpoint.model_checkpoint_path)
             else:
                 raise ValueError("No checkpoint file found.")
-            # The global step should be the only uninitialized variable.
-            session.run(tf.initialize_variables([model.global_step]))
-            output_supertagger(session, data.dev_data, model, supertag_space, os.path.join(exp_logdir, "output.pstagged"))
+
+            output_supertagger(session, data.dev_data, model, supertag_space, exp_logdir, "output.pstagged")
+
+            frozen_version = g.version
+            with g.name_scope("frozen"), tf.variable_scope("model", reuse=True):
+                frozen_model = SupertaggerModel(None, data, is_training=False, freeze=True)
+            tf.train.write_graph(g.as_graph_def(from_version=frozen_version), "/tmp/taggerflow", "graph.pb", as_text=False)
         sys.exit(0)
 
     configs = expand_grid(args.grid)
