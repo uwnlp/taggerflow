@@ -48,7 +48,6 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(stream_handler)
     logging.getLogger().setLevel(logging.INFO)
 
-
     exp_logdir = os.path.join(args.logdir, args.exp)
 
     if not os.path.exists(exp_logdir):

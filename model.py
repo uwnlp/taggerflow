@@ -71,8 +71,11 @@ class SupertaggerModel(object):
 
         with tf.name_scope("prediction"):
             # Predictions are the indexes with the highest value from the softmax layer.
-            self.prediction = tf.argmax(self.unflatten(softmax), 2, name="prediction")
+            unflattened = self.unflatten(softmax)
+            self.prediction = tf.argmax(unflattened, 2, name="prediction")
             self.probabilities = self.unflatten(tf.nn.softmax(softmax), name="probabilities")
+            self.max_probability = tf.reduce_max(unflattened, 2, name="max_probability")
+            self.num_unpruned = tf.reduce_sum(tf.to_int32(self.probabilities > tf.expand_dims(self.max_probability * 1e-6, 2)), 2, name="num_unpruned")
 
         if is_training:
             with tf.name_scope("loss"):
