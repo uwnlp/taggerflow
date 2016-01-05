@@ -10,6 +10,7 @@ import logging
 import features
 
 from custom_rnn_cell import *
+from custom_rnn import *
 
 class SupertaggerModel(object):
     lstm_hidden_size = 128
@@ -57,7 +58,7 @@ class SupertaggerModel(object):
             inputs = [tf.squeeze(i, [1]) for i in inputs]
 
             # Construct LSTM.
-            outputs = rnn.bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
+            outputs = bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
 
             # Rejoin LSTM outputs.
             outputs = [tf.expand_dims(output, 1) for output in outputs]
