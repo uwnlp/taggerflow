@@ -18,7 +18,7 @@ EVAL_FREQUENCY = 2
 # Run basically forever.
 GRACE_PERIOD = 10000
 
-def output_supertagger(session, data, model, supertag_space, logdir, pstagged_file):
+def evaluate_supertagger(session, data, model):
     tokens,x,y,num_tokens,is_tritrain,weights = data
     with Timer("Dev evaluation"):
         probabilities = session.run(model.probabilities, {
@@ -29,27 +29,6 @@ def output_supertagger(session, data, model, supertag_space, logdir, pstagged_fi
     num_total = np.sum(weights)
     accuracy = (100.0 * num_correct)/num_total
     logging.info("Accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
-
-    with open(os.path.join(logdir, pstagged_file), "w") as f:
-        for i,n in enumerate(num_tokens):
-            for t,p in zip(tokens[1:n-1,i], probabilities[1:n-1,i,:]):
-                max_p = max(p)
-                unpruned = np.nonzero(np.divide(p,max_p) > 1e-6)[0]
-                f.write("{}|{}\n".format(t, "|".join("{}={:.3f}".format(j,math.log(p[j])) for j in unpruned)))
-            f.write("\n")
-
-def evaluate_supertagger(session, data, model):
-    tokens,x,y,num_tokens,is_tritrain,weights = data
-    with Timer("Dev evaluation"):
-        prediction = session.run(model.prediction, {
-            model.x: x,
-            model.num_tokens: num_tokens
-        })
-    num_correct = np.sum(np.equal(prediction, y)[y >= 0])
-    num_total = np.sum(weights)
-    accuracy = (100.0 * num_correct)/num_total
-    logging.info("Dev accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
-    return accuracy
 
 class SupertaggerEvaluationContext(ThreadedContext):
     def __init__(self, session, data, model, global_step, writer, logdir):

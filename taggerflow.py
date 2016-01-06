@@ -78,7 +78,7 @@ if __name__ == "__main__":
             else:
                 raise ValueError("No checkpoint file found.")
 
-            output_supertagger(session, data.dev_data, model, supertag_space, exp_logdir, "output.pstagged")
+            evaluate_supertagger(session, data.dev_data, model)
 
             frozen_version = g.version
             with g.name_scope("frozen"), tf.variable_scope("model", reuse=True):

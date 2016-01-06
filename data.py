@@ -11,10 +11,10 @@ from ccgbank import *
 from util import *
 
 class SupertaggerData(object):
-    max_tokens = 100
+    max_tokens = 72
     batch_size = 1024
     bucket_size = 5
-    max_tritrain_length = 70
+    max_tritrain_length = 72
 
     def __init__(self, supertag_space, embedding_spaces, train_sentences, tritrain_sentences, dev_sentences):
         self.supertag_space = supertag_space

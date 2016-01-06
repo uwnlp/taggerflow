@@ -39,8 +39,9 @@ class SupertaggerModel(object):
         with tf.name_scope("embeddings"):
             with tf.device("/cpu:0"):
                 embeddings_w = collections.OrderedDict((name, maybe_get_variable(name, [space.size(), space.embedding_size], freeze=freeze)) for name, space in embedding_spaces.items())
-                embeddings = [tf.squeeze(tf.nn.embedding_lookup(e,i), [2]) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
-            concat_embedding = tf.concat(2, embeddings)
+                embeddings = [tf.nn.embedding_lookup(e,i) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
+            concat_embedding = tf.concat(3, embeddings)
+            concat_embedding = tf.squeeze(concat_embedding, [2])
             if is_training:
                 concat_embedding = tf.nn.dropout(concat_embedding, 1.0 - config.dropout_probability)
 
@@ -69,11 +70,8 @@ class SupertaggerModel(object):
             softmax = linear(penultimate, supertags_size, "softmax", freeze=freeze)
 
         with tf.name_scope("prediction"):
-            # Predictions are the indexes with the highest value from the softmax layer.
-            unflattened = self.unflatten(softmax)
-            self.prediction = tf.argmax(unflattened, 2, name="prediction")
             self.probabilities = self.unflatten(tf.nn.softmax(softmax), name="probabilities")
-            self.max_probability = tf.reduce_max(unflattened, 2, name="max_probability")
+            self.max_probability = tf.reduce_max(self.probabilities, 2, name="max_probability")
             self.num_unpruned = tf.reduce_sum(tf.to_int32(self.probabilities > tf.expand_dims(self.max_probability * 1e-6, 2)), 2, name="num_unpruned")
 
         if is_training:
