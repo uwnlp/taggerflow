@@ -28,12 +28,12 @@ class SupertaggerModel(object):
 
         with tf.name_scope("inputs"):
             # Each training step is batched with a maximum length.
-            self.x = tf.placeholder(tf.int32, [None, max_tokens, len(embedding_spaces)], name="x")
+            self.x = tf.placeholder(tf.int32, [max_tokens, None, len(embedding_spaces)], name="x")
             self.num_tokens = tf.placeholder(tf.int64, [None], name="num_tokens")
             if is_training:
-                self.y = tf.placeholder(tf.int32, [None, max_tokens], name="y")
+                self.y = tf.placeholder(tf.int32, [max_tokens, None], name="y")
                 self.tritrain = tf.placeholder(tf.float32, [None], name="tritrain")
-                self.weights = tf.placeholder(tf.float32, [None, max_tokens], name="weights")
+                self.weights = tf.placeholder(tf.float32, [max_tokens, None], name="weights")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"):
@@ -54,15 +54,13 @@ class SupertaggerModel(object):
                 cell = first_cell
 
             # Split into LSTM inputs.
-            inputs = tf.split(1, max_tokens, concat_embedding)
-            inputs = [tf.squeeze(i, [1]) for i in inputs]
+            inputs = tf.unpack(concat_embedding)
 
             # Construct LSTM.
             outputs = bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
 
             # Rejoin LSTM outputs.
-            outputs = [tf.expand_dims(output, 1) for output in outputs]
-            outputs = tf.concat(1, outputs)
+            outputs = tf.pack(outputs)
 
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
@@ -80,10 +78,10 @@ class SupertaggerModel(object):
 
         if is_training:
             with tf.name_scope("loss"):
-                modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 1)
+                modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 0)
 
                 # Cross-entropy loss.
-                self.loss = seq2seq.sequence_loss([softmax],
+                self.loss = seq2seq.sequence_loss([tf.transpose(softmax)],
                                                   [self.flatten(self.y)],
                                                   [self.flatten(modified_weights)],
                                                   supertags_size,
@@ -114,4 +112,4 @@ class SupertaggerModel(object):
             raise ValueError("Unsupported shape: {}".format(x.get_shape()))
 
     def unflatten(self, flattened, name=None):
-        return tf.reshape(flattened, [-1, self.max_tokens, flattened.get_shape()[1].value], name=name)
+        return tf.reshape(flattened, [self.max_tokens, -1, flattened.get_shape()[1].value], name=name)

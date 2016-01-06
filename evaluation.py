@@ -32,7 +32,7 @@ def output_supertagger(session, data, model, supertag_space, logdir, pstagged_fi
 
     with open(os.path.join(logdir, pstagged_file), "w") as f:
         for i,n in enumerate(num_tokens):
-            for t,p in zip(tokens[i,1:n-1], probabilities[i,1:n-1,:]):
+            for t,p in zip(tokens[1:n-1,i], probabilities[1:n-1,i,:]):
                 max_p = max(p)
                 unpruned = np.nonzero(np.divide(p,max_p) > 1e-6)[0]
                 f.write("{}|{}\n".format(t, "|".join("{}={:.3f}".format(j,math.log(p[j])) for j in unpruned)))

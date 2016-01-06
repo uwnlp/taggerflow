@@ -86,12 +86,12 @@ class SupertaggerData(object):
         # Make the data size divisible by the batch size.
         data_size = int(self.batch_size * math.ceil(len(sentences)/float(self.batch_size)))
 
-        data_tokens = np.empty([data_size, self.max_tokens], dtype=object)
-        data_x = np.zeros([data_size, self.max_tokens, len(self.embedding_spaces)], dtype=np.int32)
-        data_y = np.zeros([data_size, self.max_tokens], dtype=np.int32)
+        data_tokens = np.empty([self.max_tokens, data_size], dtype=object)
+        data_x = np.zeros([self.max_tokens, data_size, len(self.embedding_spaces)], dtype=np.int32)
+        data_y = np.zeros([self.max_tokens, data_size], dtype=np.int32)
         data_num_tokens = np.zeros([data_size], dtype=np.int64)
         data_tritrain = np.zeros([data_size], dtype=np.float32)
-        data_weights = np.zeros([data_size, self.max_tokens], dtype=np.float32)
+        data_weights = np.zeros([self.max_tokens, data_size], dtype=np.float32)
 
         for i,(tokens,supertags,is_tritrain) in enumerate(sentences):
             if len(tokens) != len(supertags):
@@ -100,29 +100,29 @@ class SupertaggerData(object):
                 logging.info("Skipping sentence of length {}.".format(len(tokens)))
                 continue
 
-            data_tokens[i,:len(tokens)] = tokens
+            data_tokens[:len(tokens),i] = tokens
 
             x = [self.get_embedding_indexes(t) for t in tokens]
             y = [self.supertag_space.index(s) for s in supertags]
 
-            data_x[i,:len(x):] = x
+            data_x[:len(x),i,:] = x
 
             # TensorFlow will complain about looking up negative indices.
             # Convert them to something positive and mask them out later.
-            data_y[i,:len(y)] = np.absolute(y)
+            data_y[:len(y),i] = np.absolute(y)
 
             data_num_tokens[i] = len(x)
             data_tritrain[i] = int(is_tritrain)
 
             # Labels with negative indices should have 0 weight.
-            data_weights[i,:len(y)] = [int(y_val >= 0) for y_val in y]
+            data_weights[:len(y),i] = [int(y_val >= 0) for y_val in y]
             if not is_dev:
                 if is_tritrain:
                     # Tri-training data is weighted so that the sentence length distribution matches the training data.
-                    data_weights[i,:len(y)] *= self.distribution_ratios[self.get_bucket(len(x))]
+                    data_weights[:len(y),i] *= self.distribution_ratios[self.get_bucket(len(x))]
                 else:
                     # Weight the original training data so they match the size of the tri-training set.
                     # This can be further controlled by the ccgbank_weight configuration.
-                    data_weights[i,:len(y)] *= self.tritrain_ratio
+                    data_weights[:len(y),i] *= self.tritrain_ratio
 
         return (data_tokens, data_x, data_y, data_num_tokens, data_tritrain, data_weights)
