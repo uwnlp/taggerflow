@@ -71,8 +71,6 @@ class SupertaggerModel(object):
 
         with tf.name_scope("prediction"):
             self.probabilities = self.unflatten(tf.nn.softmax(softmax), name="probabilities")
-            self.max_probability = tf.reduce_max(self.probabilities, 2, name="max_probability")
-            self.num_unpruned = tf.reduce_sum(tf.to_int32(self.probabilities > tf.expand_dims(self.max_probability * 1e-6, 2)), 2, name="num_unpruned")
 
         if is_training:
             with tf.name_scope("loss"):
