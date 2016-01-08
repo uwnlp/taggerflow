@@ -27,15 +27,14 @@ class DyerLSTMCell(rnn_cell.RNNCell):
   def __call__(self, inputs, state, scope=None):
     """Long short-term memory cell (LSTM)."""
     with tf.variable_scope(scope or type(self).__name__):  # "DyerLSTMCell"
-      c, h = tf.split(1, 2, state)
+      h, c = tf.split(1, 2, state)
 
       input_gate = tf.sigmoid(linear([inputs, h, c], self._num_units, "input_gate", initial_bias=0.25, freeze=self._freeze))
       new_input = tf.tanh(linear([inputs, h], self._num_units, "new_input", freeze=self._freeze))
       new_c = input_gate * new_input + (1.0 - input_gate) * c
       output_gate = tf.sigmoid(linear([inputs, h, new_c], self._num_units, "output_gate", freeze=self._freeze))
       new_h = tf.tanh(new_c) * output_gate
-
-    return new_h, tf.concat(1, [new_c, new_h])
+    return new_h, tf.concat(1, [new_h, new_c])
 
 def linear(args, output_size, scope, initial_bias=0.0, freeze=False):
   """Slight modification of the linear function in rnn_cell."""

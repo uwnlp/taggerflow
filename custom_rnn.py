@@ -32,6 +32,7 @@ def rnn(cell, inputs, initial_state=None, dtype=None,
             time >= max_sequence_length,
             lambda: zero_output_state, output_state)
         output.set_shape([None, cell.output_size])
+        state.set_shape([None, cell.state_size])
       else:
         (output, state) = output_state()
 

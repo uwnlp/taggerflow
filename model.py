@@ -15,7 +15,7 @@ from custom_rnn import *
 class SupertaggerModel(object):
     lstm_hidden_size = 128
     penultimate_hidden_size = 64
-    num_layers = 2
+    num_layers = 1
 
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
     def __init__(self, config, data, is_training, freeze=False):
@@ -48,8 +48,8 @@ class SupertaggerModel(object):
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
             first_cell = DyerLSTMCell(self.lstm_hidden_size, concat_embedding.get_shape()[2].value, freeze=freeze)
-            stacked_cell = DyerLSTMCell(self.lstm_hidden_size, self.lstm_hidden_size, freeze=freeze)
             if self.num_layers > 1:
+                stacked_cell = DyerLSTMCell(self.lstm_hidden_size, self.lstm_hidden_size, freeze=freeze)
                 cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (self.num_layers - 1))
             else:
                 cell = first_cell
