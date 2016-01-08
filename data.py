@@ -95,7 +95,7 @@ class SupertaggerData(object):
 
         data_tokens = np.empty([max_tokens, data_size], dtype=object)
         data_x = np.zeros([max_tokens, data_size, len(self.embedding_spaces)], dtype=np.int32)
-        data_y = np.zeros([max_tokens, data_size, self.supertag_space.size()], dtype=np.float32)
+        data_y = np.zeros([max_tokens, data_size], dtype=np.int32)
         data_num_tokens = np.zeros([data_size], dtype=np.int64)
         data_tritrain = np.zeros([data_size], dtype=np.float32)
         data_weights = np.zeros([max_tokens, data_size], dtype=np.float32)
@@ -113,11 +113,7 @@ class SupertaggerData(object):
             y = [self.supertag_space.index(s) for s in supertags]
 
             data_x[:len(x),i,:] = x
-
-            # Use a dense representation so we can use more GPU.
-            for j,y_val in enumerate(y):
-                if y_val >= 0:
-                    data_y[j,i,y_val] = 1
+            data_y[:len(y),i] = np.absolute(y)
 
             data_num_tokens[i] = len(x)
             data_tritrain[i] = int(is_tritrain)

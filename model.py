@@ -31,7 +31,7 @@ class SupertaggerModel(object):
             self.x = tf.placeholder(tf.int32, [max_tokens, None, len(embedding_spaces)], name="x")
             self.num_tokens = tf.placeholder(tf.int64, [None], name="num_tokens")
             if is_training:
-                self.y = tf.placeholder(tf.float32, [max_tokens, None, supertags_size], name="y")
+                self.y = tf.placeholder(tf.int32, [max_tokens, None], name="y")
                 self.tritrain = tf.placeholder(tf.float32, [None], name="tritrain")
                 self.weights = tf.placeholder(tf.float32, [max_tokens, None], name="weights")
 
@@ -76,8 +76,12 @@ class SupertaggerModel(object):
             with tf.name_scope("loss"):
                 modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 0)
                 targets = self.flatten(self.y)
-                cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, targets)
-                self.loss = tf.reduce_mean(cross_entropy * self.flatten(modified_weights))
+
+                self.loss = seq2seq.sequence_loss([logits],
+                                                  [self.flatten(self.y)],
+                                                  [self.flatten(modified_weights)],
+                                                  supertags_size,
+                                                  average_across_timesteps=True, average_across_batch=True)
 
                 params = tf.trainable_variables()
                 if self.config.regularization > 0.0:

@@ -26,7 +26,6 @@ def evaluate_supertagger(session, data, model):
             model.num_tokens: num_tokens
         })
     predictions = np.argmax(probabilities, 2)
-    y = np.argmax(y, 2)
     num_correct = np.sum(np.equal(predictions, y) * weights)
     num_total = np.sum(weights)
     accuracy = (100.0 * num_correct)/num_total
