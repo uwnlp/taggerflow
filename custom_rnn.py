@@ -1,8 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.ops import rnn
 
-def fixed_rnn(cell, inputs, initial_state=None, dtype=None,
+def rnn(cell, inputs, initial_state=None, dtype=None,
         sequence_length=None, scope=None):
   outputs = []
   states = []
@@ -41,6 +40,18 @@ def fixed_rnn(cell, inputs, initial_state=None, dtype=None,
 
     return (outputs, states)
 
+def _reverse_seq(input_seq, lengths):
+  if lengths is None:
+    return list(reversed(input_seq))
+
+  # Join into (time, batch_size, depth)
+  s_joined = tf.pack(input_seq)
+  # Reverse along dimension 0
+  s_reversed = tf.reverse_sequence(s_joined, lengths, 0, 1)
+  # Split again into list
+  result = tf.unpack(s_reversed)
+  return result
+
 def bidirectional_rnn(cell_fw, cell_bw, inputs,
                       initial_state_fw=None, initial_state_bw=None,
                       dtype=None, sequence_length=None, scope=None):
@@ -48,12 +59,11 @@ def bidirectional_rnn(cell_fw, cell_bw, inputs,
   name = scope or "BiRNN"
   # Forward direction
   with tf.variable_scope(name + "_FW"):
-    output_fw, _ = fixed_rnn(cell_fw, inputs, initial_state_fw, dtype, sequence_length)
+    output_fw, _ = rnn(cell_fw, inputs, initial_state_fw, dtype, sequence_length)
   # Backward direction
   with tf.variable_scope(name + "_BW"):
-    tmp, _ = fixed_rnn(
-        cell_bw, rnn._reverse_seq(inputs, sequence_length), initial_state_bw, dtype, sequence_length)
-  output_bw = rnn._reverse_seq(tmp, sequence_length)
+    tmp, _ = rnn(cell_bw, _reverse_seq(inputs, sequence_length), initial_state_bw, dtype, sequence_length)
+  output_bw = _reverse_seq(tmp, sequence_length)
   # Concat each of the forward/backward outputs
   outputs = [tf.concat(1, [fw, bw])
              for fw, bw in zip(output_fw, output_bw)]

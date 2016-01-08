@@ -20,18 +20,18 @@ class SupertaggerModel(object):
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
     def __init__(self, config, data, is_training, freeze=False):
         self.config = config
+        self.max_tokens = max_tokens = data.train_max_tokens if is_training else data.dev_max_tokens
 
         # Redeclare some variables for convenience.
         supertags_size = data.supertag_space.size()
         embedding_spaces = data.embedding_spaces
-        self.max_tokens = max_tokens = data.max_tokens
 
         with tf.name_scope("inputs"):
             # Each training step is batched with a maximum length.
             self.x = tf.placeholder(tf.int32, [max_tokens, None, len(embedding_spaces)], name="x")
             self.num_tokens = tf.placeholder(tf.int64, [None], name="num_tokens")
             if is_training:
-                self.y = tf.placeholder(tf.int32, [max_tokens, None], name="y")
+                self.y = tf.placeholder(tf.float32, [max_tokens, None, supertags_size], name="y")
                 self.tritrain = tf.placeholder(tf.float32, [None], name="tritrain")
                 self.weights = tf.placeholder(tf.float32, [max_tokens, None], name="weights")
 
@@ -67,21 +67,17 @@ class SupertaggerModel(object):
             # From LSTM outputs to softmax.
             flattened = self.flatten(outputs)
             penultimate = tf.nn.relu(linear(flattened, self.penultimate_hidden_size, "penultimate", freeze=freeze))
-            softmax = linear(penultimate, supertags_size, "softmax", freeze=freeze)
+            logits = linear(penultimate, supertags_size, "softmax", freeze=freeze)
 
         with tf.name_scope("prediction"):
-            self.probabilities = self.unflatten(tf.nn.softmax(softmax), name="probabilities")
+            self.probabilities = self.unflatten(tf.nn.softmax(logits), name="probabilities")
 
         if is_training:
             with tf.name_scope("loss"):
                 modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 0)
-
-                # Cross-entropy loss.
-                self.loss = seq2seq.sequence_loss([tf.transpose(softmax)],
-                                                  [self.flatten(self.y)],
-                                                  [self.flatten(modified_weights)],
-                                                  supertags_size,
-                                                  average_across_timesteps=False)
+                targets = self.flatten(self.y)
+                cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, targets)
+                self.loss = tf.reduce_mean(cross_entropy * self.flatten(modified_weights))
 
                 params = tf.trainable_variables()
                 if self.config.regularization > 0.0:

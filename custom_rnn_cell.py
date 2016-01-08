@@ -29,7 +29,7 @@ class DyerLSTMCell(rnn_cell.RNNCell):
     with tf.variable_scope(scope or type(self).__name__):  # "DyerLSTMCell"
       c, h = tf.split(1, 2, state)
 
-      input_gate = tf.sigmoid(linear([inputs, h, c], self._num_units, "input_gate", freeze=self._freeze))
+      input_gate = tf.sigmoid(linear([inputs, h, c], self._num_units, "input_gate", initial_bias=0.25, freeze=self._freeze))
       new_input = tf.tanh(linear([inputs, h], self._num_units, "new_input", freeze=self._freeze))
       new_c = input_gate * new_input + (1.0 - input_gate) * c
       output_gate = tf.sigmoid(linear([inputs, h, new_c], self._num_units, "output_gate", freeze=self._freeze))
@@ -37,7 +37,7 @@ class DyerLSTMCell(rnn_cell.RNNCell):
 
     return new_h, tf.concat(1, [new_c, new_h])
 
-def linear(args, output_size, scope, freeze):
+def linear(args, output_size, scope, initial_bias=0.0, freeze=False):
   """Slight modification of the linear function in rnn_cell."""
 
   assert args
@@ -58,7 +58,7 @@ def linear(args, output_size, scope, freeze):
   # Now the computation.
   with tf.variable_scope(scope):
     matrix = maybe_get_variable("Matrix", [total_arg_size, output_size], freeze=freeze)
-    bias = maybe_get_variable("Bias", [output_size], initializer=tf.constant_initializer(0.0), freeze=freeze)
+    bias = maybe_get_variable("Bias", [output_size], initializer=tf.constant_initializer(initial_bias), freeze=freeze)
   return tf.matmul(args[0] if len(args) == 1 else tf.concat(1, args), matrix) + bias
 
 def maybe_get_variable(name, shape, initializer=None, freeze=False):

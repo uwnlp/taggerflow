@@ -37,8 +37,9 @@ if __name__ == "__main__":
     parser.add_argument("-g", "--gpu", help="specify gpu devices to use")
     parser.add_argument("-l", "--logdir", help="directory to contain logs", default="logs")
     parser.add_argument("-p", "--params", help="pretrained parameter file")
-    parser.add_argument("-d", "--debug", help="debug mode that runs on tiny subset", action="store_true")
+    parser.add_argument("-t", "--tritrain", help="whether or not to use tritraining data", action="store_true")
     parser.add_argument("-c", "--checkpoint_dir", help="recover checkpoint and evaluate")
+
     args = parser.parse_args()
 
     if args.gpu is not None:
@@ -57,7 +58,7 @@ if __name__ == "__main__":
         supertag_space = SupertagSpace(maybe_download("data",
                                                       "http://appositive.cs.washington.edu/resources/",
                                                       "categories"))
-        train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits(args.debug or args.checkpoint_dir is not None)
+        train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits(args.tritrain and args.checkpoint_dir is None)
 
         if args.params is None:
             parameters = get_default_parameters(train_sentences)
@@ -73,12 +74,16 @@ if __name__ == "__main__":
             saver = tf.train.Saver(tf.trainable_variables())
             checkpoint = tf.train.get_checkpoint_state(args.checkpoint_dir)
             if checkpoint and checkpoint.model_checkpoint_path:
-                print("Restoring from: {}".format(checkpoint.model_checkpoint_path))
+                logging.info("Restoring from: {}".format(checkpoint.model_checkpoint_path))
                 saver.restore(session, checkpoint.model_checkpoint_path)
             else:
                 raise ValueError("No checkpoint file found.")
 
+            logging.info("Start eval.")
+
             evaluate_supertagger(session, data.dev_data, model)
+
+            logging.info("End eval.")
 
             frozen_version = g.version
             with g.name_scope("frozen"), tf.variable_scope("model", reuse=True):

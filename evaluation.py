@@ -25,10 +25,13 @@ def evaluate_supertagger(session, data, model):
             model.x: x,
             model.num_tokens: num_tokens
         })
-    num_correct = np.sum(np.equal(np.argmax(probabilities,2), y)[y >= 0])
+    predictions = np.argmax(probabilities, 2)
+    y = np.argmax(y, 2)
+    num_correct = np.sum(np.equal(predictions, y) * weights)
     num_total = np.sum(weights)
     accuracy = (100.0 * num_correct)/num_total
     logging.info("Accuracy: {:.3f}% ({}/{})".format(accuracy, num_correct, num_total))
+    return accuracy
 
 class SupertaggerEvaluationContext(ThreadedContext):
     def __init__(self, session, data, model, global_step, writer, logdir):
