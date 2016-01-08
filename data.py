@@ -11,8 +11,8 @@ from ccgbank import *
 from util import *
 
 class SupertaggerData(object):
-    train_max_tokens = 72
-    dev_max_tokens = 100
+    train_max_tokens = 102
+    dev_max_tokens = 102
     batch_size = 32
     bucket_size = 5
     max_tritrain_length = 72
@@ -42,11 +42,11 @@ class SupertaggerData(object):
             logging.info("Distribution ratios: {}".format(self.format_distribution(self.distribution_ratios)))
             logging.info("Tri-train to train ratio: {:.5f}".format(self.tritrain_ratio))
 
-        logging.info("Massaging data into training format...")
+        logging.info("Massaging data into input format...")
         self.train_data = self.get_data(train_sentences + tritrain_sentences, True)
         self.dev_data = self.get_data(dev_sentences, False)
 
-        logging.info("Train batches: {}".format(self.train_data[0].shape[1] / self.batch_size))
+        logging.info("Train batches: {}".format(self.train_data[0].shape[0] / self.batch_size))
 
     def format_distribution(self, distribution):
         return ",".join("{:.5f}".format(p) for p in distribution)
@@ -64,41 +64,16 @@ class SupertaggerData(object):
     def get_embedding_indexes(self, token):
         return [space.index(space.extract(token)) for space in self.embedding_spaces.values()]
 
-    def get_batches(self, data):
-        data_tokens, data_x, data_y, data_num_tokens, data_tritrain, data_weights = data
-        batch_size = self.batch_size
-        data_size = data_x.shape[1]
-        if data_size % batch_size != 0:
-            raise ValueError("The data size should be divisible by the batch size.")
-
-        indexes = np.arange(data_size)
-        np.random.shuffle(indexes)
-        batches = []
-        for i in range(data_size / batch_size):
-            batch_indexes = indexes[i * batch_size: (i + 1) * batch_size]
-            batches.append((data_tokens[:,batch_indexes],
-                            data_x[:,batch_indexes,:],
-                            data_y[:,batch_indexes],
-                            data_num_tokens[batch_indexes],
-                            data_tritrain[batch_indexes],
-                            data_weights[:,batch_indexes]))
-        return batches
-
     def get_data(self, sentences, is_training):
-        if is_training:
-            # Make the data size divisible by the batch size.
-            data_size = int(self.batch_size * math.ceil(len(sentences)/float(self.batch_size)))
-        else:
-            data_size = len(sentences)
-
+        data_size = len(sentences)
         max_tokens = self.train_max_tokens if is_training else self.dev_max_tokens
 
-        data_tokens = np.empty([max_tokens, data_size], dtype=object)
-        data_x = np.zeros([max_tokens, data_size, len(self.embedding_spaces)], dtype=np.int32)
-        data_y = np.zeros([max_tokens, data_size], dtype=np.int32)
+        data_tokens = np.empty([data_size, max_tokens], dtype=object)
+        data_x = np.zeros([data_size, max_tokens, len(self.embedding_spaces)], dtype=np.int32)
+        data_y = np.zeros([data_size, max_tokens], dtype=np.int32)
         data_num_tokens = np.zeros([data_size], dtype=np.int64)
         data_tritrain = np.zeros([data_size], dtype=np.float32)
-        data_weights = np.zeros([max_tokens, data_size], dtype=np.float32)
+        data_weights = np.zeros([data_size, max_tokens], dtype=np.float32)
 
         for i,(tokens,supertags,is_tritrain) in enumerate(sentences):
             if len(tokens) != len(supertags):
@@ -107,21 +82,21 @@ class SupertaggerData(object):
                 logging.info("Skipping sentence of length {}.".format(len(tokens)))
                 continue
 
-            data_tokens[:len(tokens),i] = tokens
+            data_tokens[i,:len(tokens)] = tokens
 
             x = [self.get_embedding_indexes(t) for t in tokens]
             y = [self.supertag_space.index(s) for s in supertags]
 
-            data_x[:len(x),i,:] = x
-            data_y[:len(y),i] = np.absolute(y)
+            data_x[i,:len(x)] = x
+            data_y[i,:len(y)] = np.absolute(y)
 
             data_num_tokens[i] = len(x)
             data_tritrain[i] = int(is_tritrain)
 
             # Labels with negative indices should have 0 weight.
-            data_weights[:len(y),i] = [int(y_val >= 0) for y_val in y]
+            data_weights[i,:len(y)] = [int(y_val >= 0) for y_val in y]
             if is_training and is_tritrain:
                 # Tri-training data is weighted so that the sentence length distribution matches the training data.
-                data_weights[:len(y),i] *= self.distribution_ratios[self.get_bucket(len(x))] / self.tritrain_ratio
+                data_weights[i,:len(y)] *= self.distribution_ratios[self.get_bucket(len(x))] / self.tritrain_ratio
 
         return (data_tokens, data_x, data_y, data_num_tokens, data_tritrain, data_weights)

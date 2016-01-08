@@ -20,20 +20,28 @@ class SupertaggerModel(object):
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
     def __init__(self, config, data, is_training, freeze=False):
         self.config = config
-        self.max_tokens = max_tokens = data.train_max_tokens if is_training else data.dev_max_tokens
+        self.max_tokens = data.train_max_tokens if is_training else data.dev_max_tokens
 
         # Redeclare some variables for convenience.
         supertags_size = data.supertag_space.size()
         embedding_spaces = data.embedding_spaces
 
         with tf.name_scope("inputs"):
-            # Each training step is batched with a maximum length.
-            self.x = tf.placeholder(tf.int32, [max_tokens, None, len(embedding_spaces)], name="x")
-            self.num_tokens = tf.placeholder(tf.int64, [None], name="num_tokens")
             if is_training:
-                self.y = tf.placeholder(tf.int32, [max_tokens, None], name="y")
-                self.tritrain = tf.placeholder(tf.float32, [None], name="tritrain")
-                self.weights = tf.placeholder(tf.float32, [max_tokens, None], name="weights")
+                x_prop = (tf.int32, [self.max_tokens, len(embedding_spaces)])
+                y_prop = (tf.int32, [self.max_tokens])
+                num_tokens_prop = (tf.int64, [])
+                tritrain_prop = (tf.float32, [])
+                weights_prop = (tf.float32, [self.max_tokens])
+                dtypes, shapes = zip(x_prop, y_prop, num_tokens_prop, tritrain_prop, weights_prop)
+                input_queue = tf.RandomShuffleQueue(data.train_data[0].shape[0] + data.batch_size * 3, 0, dtypes, shapes=shapes)
+                self.input_queue_size = input_queue.size()
+                self.input_queue_refresh = input_queue.enqueue_many(data.train_data[1:])
+                self.x, self.y, self.num_tokens, self.tritrain, self.weights = input_queue.dequeue_many(data.batch_size)
+            else:
+                # Each training step is batched with a maximum length.
+                self.x = tf.placeholder(tf.int32, [None, self.max_tokens, len(embedding_spaces)], name="x")
+                self.num_tokens = tf.placeholder(tf.int64, [None], name="num_tokens")
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"):
@@ -55,13 +63,13 @@ class SupertaggerModel(object):
                 cell = first_cell
 
             # Split into LSTM inputs.
-            inputs = tf.unpack(concat_embedding)
+            inputs = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, concat_embedding)]
 
             # Construct LSTM.
             outputs = bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
 
             # Rejoin LSTM outputs.
-            outputs = tf.pack(outputs)
+            outputs = tf.concat(1, [tf.expand_dims(output, 1) for output in outputs])
 
         with tf.name_scope("softmax"):
             # From LSTM outputs to softmax.
@@ -74,7 +82,7 @@ class SupertaggerModel(object):
 
         if is_training:
             with tf.name_scope("loss"):
-                modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 0)
+                modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 1)
                 targets = self.flatten(self.y)
 
                 self.loss = seq2seq.sequence_loss([logits],
@@ -108,4 +116,4 @@ class SupertaggerModel(object):
             raise ValueError("Unsupported shape: {}".format(x.get_shape()))
 
     def unflatten(self, flattened, name=None):
-        return tf.reshape(flattened, [self.max_tokens, -1, flattened.get_shape()[1].value], name=name)
+        return tf.reshape(flattened, [-1, self.max_tokens, flattened.get_shape()[1].value], name=name)
