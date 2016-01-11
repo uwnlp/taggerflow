@@ -89,7 +89,7 @@ class SupertaggerModel(object):
                                                   [self.flatten(self.y)],
                                                   [self.flatten(modified_weights)],
                                                   supertags_size,
-                                                  average_across_timesteps=True, average_across_batch=True)
+                                                  average_across_timesteps=False, average_across_batch=False)
 
                 params = tf.trainable_variables()
                 if self.config.regularization > 0.0:
@@ -101,7 +101,7 @@ class SupertaggerModel(object):
             # Construct training operations.
             with tf.name_scope("training"):
                 self.global_step = tf.get_variable("global_step", [], trainable=False, initializer=tf.constant_initializer(0))
-                optimizer = tf.train.AdamOptimizer()
+                optimizer = tf.train.MomentumOptimizer(0.01, 0.7)
                 grads = tf.gradients(self.cost, params)
                 grads, _ = tf.clip_by_global_norm(grads, config.max_grad_norm)
                 self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
