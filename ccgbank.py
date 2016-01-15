@@ -28,6 +28,6 @@ class SupertagReader(object):
 
     def get_splits(self, read_tritrain=True):
         train = self.get_split("train", is_tritrain=False)
-        tritrain = self.get_split("tritrain", istritrain=True) if read_tritrain else []
+        tritrain = self.get_split("tritrain", is_tritrain=True) if read_tritrain else []
         dev = self.get_split("dev", is_tritrain=True)
         return train, tritrain, dev

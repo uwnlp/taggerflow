@@ -2,5 +2,5 @@
     "max_grad_norm": [5.0],
     "regularization" : [1e-6],
     "dropout_probability": [0.5],
-    "ccgbank_weight": [0.25]
+    "tritrain_weight": [4.0]
 }

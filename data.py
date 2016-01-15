@@ -13,7 +13,7 @@ from util import *
 class SupertaggerData(object):
     train_max_tokens = 102
     dev_max_tokens = 102
-    batch_size = 32
+    batch_size = 4
     bucket_size = 5
     max_tritrain_length = 72
 
@@ -97,6 +97,6 @@ class SupertaggerData(object):
             data_weights[i,:len(y)] = [int(y_val >= 0) for y_val in y]
             if is_training and is_tritrain:
                 # Tri-training data is weighted so that the sentence length distribution matches the training data.
-                data_weights[i,:len(y)] *= self.distribution_ratios[self.get_bucket(len(x))] / self.tritrain_ratio
+                data_weights[i,:len(y)] *= self.distribution_ratios[self.get_bucket(len(x))] * self.tritrain_ratio
 
         return (data_tokens, data_x, data_y, data_num_tokens, data_tritrain, data_weights)

@@ -82,7 +82,7 @@ class SupertaggerModel(object):
 
         if is_training:
             with tf.name_scope("loss"):
-                modified_weights = self.weights * tf.expand_dims(config.ccgbank_weight * (1.0 - self.tritrain) +  self.tritrain, 1)
+                modified_weights = self.weights * tf.expand_dims((1.0 - self.tritrain) +  config.tritrain_weight * self.tritrain, 1)
                 targets = self.flatten(self.y)
 
                 self.loss = seq2seq.sequence_loss([logits],
