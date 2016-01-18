@@ -6,7 +6,6 @@ class SupertaggerConfig(object):
     def __init__(self, hyperparams, varying_keys):
         # Save as member variables for convenience.
         self.max_grad_norm = hyperparams["max_grad_norm"]
-        self.regularization = hyperparams["regularization"]
         self.dropout_probability = hyperparams["dropout_probability"]
         self.tritrain_weight = hyperparams["tritrain_weight"]
 

@@ -16,7 +16,7 @@ class SupertagReader(object):
     def get_sentences(self, filepath, is_tritrain):
         with open(filepath) as f:
             lines = f.readlines()
-            sentences = [zip(*[self.get_word_and_supertag(split.split("|")) for split in line.split(" ")]) for line in lines]
+            sentences = (itertools.izip(*[self.get_word_and_supertag(split.split("|")) for split in line.split(" ")]) for line in lines)
             return [([START_MARKER] + list(words) + [END_MARKER],
                      [None] + list(supertags) + [None],
                      is_tritrain) for words,supertags in sentences]
@@ -29,5 +29,5 @@ class SupertagReader(object):
     def get_splits(self, read_tritrain=True):
         train = self.get_split("train", is_tritrain=False)
         tritrain = self.get_split("tritrain", is_tritrain=True) if read_tritrain else []
-        dev = self.get_split("dev", is_tritrain=True)
+        dev = self.get_split("dev", is_tritrain=False)
         return train, tritrain, dev

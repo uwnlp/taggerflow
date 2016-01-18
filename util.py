@@ -42,26 +42,6 @@ class Timer:
         logging.info("{} took {} ({} since last tick).".format(message, self.readable(current - self.start), self.readable(current - self.last_tick)))
         self.last_tick = current
 
-class ThreadedContext(object):
-    def __init__(self):
-          self.thread = threading.Thread(target=self.run)
-          self.stop = False
-
-    def __enter__(self):
-        self.thread.start()
-        return self
-
-    def __exit__(self, *args):
-        self.stop = True
-        self.thread.join()
-
-    def run(self):
-        while not self.stop:
-            self.loop()
-
-    def loop(self):
-        raise NotImplementedError("Subclasses must implement this!")
-
 class LoggingToFile(object):
     def __init__(self, logdir, filename):
         self.handler = logging.FileHandler(os.path.join(logdir, filename))

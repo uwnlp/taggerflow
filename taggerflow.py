@@ -79,11 +79,7 @@ if __name__ == "__main__":
             else:
                 raise ValueError("No checkpoint file found.")
 
-            logging.info("Start eval.")
-
             evaluate_supertagger(session, data.dev_data, model)
-
-            logging.info("End eval.")
 
             frozen_version = g.version
             with g.name_scope("frozen"), tf.variable_scope("model", reuse=True):

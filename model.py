@@ -20,7 +20,7 @@ class SupertaggerModel(object):
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
     def __init__(self, config, data, is_training, freeze=False):
         self.config = config
-        self.max_tokens = data.train_max_tokens if is_training else data.dev_max_tokens
+        self.max_tokens = data.max_tokens
 
         # Redeclare some variables for convenience.
         supertags_size = data.supertag_space.size()
@@ -34,10 +34,11 @@ class SupertaggerModel(object):
                 tritrain_prop = (tf.float32, [])
                 weights_prop = (tf.float32, [self.max_tokens])
                 dtypes, shapes = zip(x_prop, y_prop, num_tokens_prop, tritrain_prop, weights_prop)
-                input_queue = tf.RandomShuffleQueue(data.train_data[0].shape[0] + data.batch_size * 3, 0, dtypes, shapes=shapes)
-                self.input_queue_size = input_queue.size()
-                self.input_queue_refresh = input_queue.enqueue_many(data.train_data[1:])
+                input_queue = tf.RandomShuffleQueue(len(data.train_sentences) + len(data.tritrain_sentences), 0, dtypes, shapes=shapes)
+                self.inputs = [tf.placeholder(dtype, shape) for dtype, shape in zip(dtypes, shapes)]
+                self.input_enqueue = input_queue.enqueue(self.inputs)
                 self.x, self.y, self.num_tokens, self.tritrain, self.weights = input_queue.dequeue_many(data.batch_size)
+                self.requeue = input_queue.enqueue_many([self.x, self.y, self.num_tokens, self.tritrain, self.weights])
             else:
                 # Each training step is batched with a maximum length.
                 self.x = tf.placeholder(tf.int32, [None, self.max_tokens, len(embedding_spaces)], name="x")
@@ -92,17 +93,12 @@ class SupertaggerModel(object):
                                                   average_across_timesteps=False, average_across_batch=False)
 
                 params = tf.trainable_variables()
-                if self.config.regularization > 0.0:
-                    self.regularization = self.config.regularization * sum(tf.nn.l2_loss(p) for p in params)
-                else:
-                    self.regularization = tf.constant(0.0)
-                self.cost = self.loss + self.regularization
 
             # Construct training operations.
             with tf.name_scope("training"):
                 self.global_step = tf.get_variable("global_step", [], trainable=False, initializer=tf.constant_initializer(0))
                 optimizer = tf.train.MomentumOptimizer(0.01, 0.7)
-                grads = tf.gradients(self.cost, params)
+                grads = tf.gradients(self.loss, params)
                 grads, _ = tf.clip_by_global_norm(grads, config.max_grad_norm)
                 self.optimize = optimizer.apply_gradients(zip(grads, params), global_step=self.global_step)
 
