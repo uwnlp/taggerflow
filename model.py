@@ -5,6 +5,7 @@ import tensorflow as tf
 from tensorflow.python.ops import rnn
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import seq2seq
+from tensorflow.python.ops import control_flow_ops
 
 import logging
 import features
@@ -15,7 +16,7 @@ from custom_rnn import *
 class SupertaggerModel(object):
     lstm_hidden_size = 128
     penultimate_hidden_size = 64
-    num_layers = 1
+    num_layers = 2
 
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
     def __init__(self, config, data, is_training, freeze=False):
@@ -34,11 +35,33 @@ class SupertaggerModel(object):
                 tritrain_prop = (tf.float32, [])
                 weights_prop = (tf.float32, [self.max_tokens])
                 dtypes, shapes = zip(x_prop, y_prop, num_tokens_prop, tritrain_prop, weights_prop)
-                input_queue = tf.RandomShuffleQueue(len(data.train_sentences) + len(data.tritrain_sentences), 0, dtypes, shapes=shapes)
+                queue0 = tf.RandomShuffleQueue(len(data.train_sentences) * 15 + len(data.tritrain_sentences) + 100, 0, dtypes, shapes=shapes)
+                queue1 = tf.RandomShuffleQueue(len(data.train_sentences) * 15 + len(data.tritrain_sentences) + 100, 0, dtypes, shapes=shapes)
                 self.inputs = [tf.placeholder(dtype, shape) for dtype, shape in zip(dtypes, shapes)]
-                self.input_enqueue = input_queue.enqueue(self.inputs)
-                self.x, self.y, self.num_tokens, self.tritrain, self.weights = input_queue.dequeue_many(data.batch_size)
-                self.requeue = input_queue.enqueue_many([self.x, self.y, self.num_tokens, self.tritrain, self.weights])
+                self.enqueue = queue0.enqueue(self.inputs)
+                self.use_queue0 = tf.placeholder(tf.bool, [])
+
+
+                dequeue0 = queue0.dequeue_many(data.batch_size)
+                dequeue1 = queue1.dequeue_many(data.batch_size)
+
+                self.x, self.y, self.num_tokens, self.tritrain, self.weights = control_flow_ops.cond(self.use_queue0,
+                                                                                                     lambda: dequeue0,
+                                                                                                     lambda: dequeue1)
+
+                requeue0 = queue0.enqueue_many([self.x, self.y, self.num_tokens, self.tritrain, self.weights])
+                requeue1 = queue1.enqueue_many([self.x, self.y, self.num_tokens, self.tritrain, self.weights])
+
+                self.requeue = control_flow_ops.cond(self.use_queue0,
+                                                     lambda: requeue1,
+                                                     lambda: requeue0)
+
+                with tf.control_dependencies([self.requeue]):
+                    queue0_size = queue0.size()
+                    queue1_size = queue1.size()
+                    self.queue_size = control_flow_ops.cond(self.use_queue0,
+                                                            lambda: queue0_size,
+                                                            lambda: queue1_size)
             else:
                 # Each training step is batched with a maximum length.
                 self.x = tf.placeholder(tf.int32, [None, self.max_tokens, len(embedding_spaces)], name="x")
