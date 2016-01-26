@@ -35,27 +35,21 @@ class SupertaggerTrainer(object):
             i = 0
             epoch = 0
             train_loss = 0.0
-            use_queue0 = True
 
             # Evaluator tells us if we should stop.
             while evaluator.maybe_evaluate():
                 i += 1
 
                 # Keep sampling batches with replacement.
-                _, loss, queue_size, _ = session.run([train_model.optimize,
-                                                      train_model.loss,
-                                                      train_model.queue_size,
-                                                      train_model.requeue], {
-                                                          train_model.use_queue0 : use_queue0
-                                                      })
-
-
+                _, loss, _ = session.run([train_model.optimize,
+                                          train_model.loss,
+                                          train_model.requeue])
                 train_loss += loss
                 if i % 100 == 0:
                     timer.tick("{} training steps".format(i))
 
-                if queue_size < data.batch_size:
-                    use_queue0 = not use_queue0
+
+                if i >= (len(data.train_sentences) + len(data.tritrain_sentences))/data.batch_size:
                     train_loss = train_loss / i
                     logging.info("Epoch {} complete(steps={}, loss={:.3f}).".format(epoch, i, train_loss))
                     self.writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag="Train Loss", simple_value=train_loss)]),

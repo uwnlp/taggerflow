@@ -77,7 +77,7 @@ class SupertaggerData(object):
 
         # Labels with negative indices should have 0 weight.
         weights = (y >= 0)
-        if is_tritrain and False:
+        if is_tritrain:
             # Tri-training data is weighted so that the sentence length distribution matches the training data.
             weights *= self.distribution_ratios[self.get_bucket(len(tokens))] * self.tritrain_ratio
 
@@ -88,24 +88,14 @@ class SupertaggerData(object):
 
     def populate_train_queue(self, session, model):
         i = 0
-
-        # TODO: Refactor this.
-        if len(self.tritrain_sentences) == 0:
-            sentences = itertools.chain(self.train_sentences, self.tritrain_sentences)
-        else:
-            sentences = itertools.chain(itertools.chain.from_iterable(itertools.repeat(self.train_sentences, 15)), self.tritrain_sentences)
-
-        for s in sentences:
+        for s in itertools.chain(self.train_sentences, self.tritrain_sentences):
             tensors = self.tensorize(s)
             if tensors is not None:
-                session.run(model.enqueue, { i:t for i,t in zip(model.inputs, tensors) })
+                session.run(model.input_enqueue, { i:t for i,t in zip(model.inputs, tensors) })
                 i += 1
                 if i % 10000 == 0:
                     logging.info("Queued {} sentences.".format(i))
 
-        # TODO: Save memory in a cleaner way.
-        del self.train_sentences[:]
-        del self.tritrain_sentences[:]
     def get_data(self, sentences):
         tensors = (self.tensorize(s) for s in sentences)
         results = [np.array(v) for v in zip(*(t for t in tensors if t is not None))]
