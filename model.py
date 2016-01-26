@@ -84,14 +84,21 @@ class SupertaggerModel(object):
         if is_training:
             with tf.name_scope("loss"):
                 modified_weights = self.weights * tf.expand_dims((1.0 - self.tritrain) +  config.tritrain_weight * self.tritrain, 1)
-                targets = self.flatten(self.y)
 
+                """
+                logits_list = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, self.unflatten(logits))]
+                softmax_list = [tf.nn.softmax(logits) for logits in logits_list]
+                y_list = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, self.y)]
+                modified_weights_list = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, modified_weights)]
+                cross_entropy_list = [-tf.log(tf.gather(tf.transpose(s), y)) for s, y in zip(softmax_list, y_list)]
+                cross_entropy_list = [tf.reduce_sum(ce * w) for ce, w in zip(cross_entropy_list, modified_weights_list)]
+                self.loss = sum(cross_entropy_list)
+                """
                 self.loss = seq2seq.sequence_loss([logits],
                                                   [self.flatten(self.y)],
                                                   [self.flatten(modified_weights)],
                                                   supertags_size,
                                                   average_across_timesteps=False, average_across_batch=False)
-
                 params = tf.trainable_variables()
 
             # Construct training operations.
