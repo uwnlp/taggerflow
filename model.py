@@ -73,7 +73,7 @@ class SupertaggerModel(object):
             outputs = tf.concat(1, [tf.expand_dims(output, 1) for output in outputs])
 
         with tf.name_scope("softmax"):
-            # From LSTM outputs to softmax.
+            # From LSTM outputs to logits.
             flattened = self.flatten(outputs)
             penultimate = tf.nn.relu(linear(flattened, self.penultimate_hidden_size, "penultimate", freeze=freeze))
             logits = linear(penultimate, supertags_size, "softmax", freeze=freeze)
@@ -86,8 +86,8 @@ class SupertaggerModel(object):
                 modified_weights = self.weights * tf.expand_dims((1.0 - self.tritrain) +  config.tritrain_weight * self.tritrain, 1)
 
                 """
-                logits_list = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, self.unflatten(logits))]
-                softmax_list = [tf.nn.softmax(logits) for logits in logits_list]
+                softmax = tf.nn.softmax(logits)
+                softmax_list = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, self.unflatten(softmax))]
                 y_list = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, self.y)]
                 modified_weights_list = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, modified_weights)]
                 cross_entropy_list = [-tf.log(tf.gather(tf.transpose(s), y)) for s, y in zip(softmax_list, y_list)]
@@ -97,8 +97,8 @@ class SupertaggerModel(object):
                 self.loss = seq2seq.sequence_loss([logits],
                                                   [self.flatten(self.y)],
                                                   [self.flatten(modified_weights)],
-                                                  supertags_size,
                                                   average_across_timesteps=False, average_across_batch=False)
+
                 params = tf.trainable_variables()
 
             # Construct training operations.
