@@ -18,9 +18,9 @@ class SupertaggerModel(object):
     num_layers = 1
 
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
-    def __init__(self, config, data, is_training, freeze=False):
+    def __init__(self, config, data, is_training, freeze=False, max_tokens=None):
         self.config = config
-        self.max_tokens = data.max_tokens
+        self.max_tokens = max_tokens or data.max_tokens
 
         # Redeclare some variables for convenience.
         supertags_size = data.supertag_space.size()

@@ -18,17 +18,19 @@ def get_pretrained_parameters(params_file):
     return params
 
 def get_default_parameters(sentences):
-    return Parameters([("words",    TurianEmbeddingSpace(maybe_download("data",
-                                                                        "http://appositive.cs.washington.edu/resources/",
-                                                                        "embeddings.raw"))),
-                       ("prefix_1", EmpiricalPrefixSpace(1, sentences)),
-                       ("prefix_2", EmpiricalPrefixSpace(2, sentences)),
-                       ("prefix_3", EmpiricalPrefixSpace(3, sentences)),
-                       ("prefix_4", EmpiricalPrefixSpace(4, sentences)),
-                       ("suffix_1", EmpiricalSuffixSpace(1, sentences)),
-                       ("suffix_2", EmpiricalSuffixSpace(2, sentences)),
-                       ("suffix_3", EmpiricalSuffixSpace(3, sentences)),
-                       ("suffix_4", EmpiricalSuffixSpace(4, sentences))])
+    parameters = Parameters([("words",    TurianEmbeddingSpace(maybe_download("data",
+                                                                              "http://appositive.cs.washington.edu/resources/",
+                                                                              "embeddings.raw"))),
+                             ("prefix_1", EmpiricalPrefixSpace(1, sentences)),
+                             ("prefix_2", EmpiricalPrefixSpace(2, sentences)),
+                             ("prefix_3", EmpiricalPrefixSpace(3, sentences)),
+                             ("prefix_4", EmpiricalPrefixSpace(4, sentences)),
+                             ("suffix_1", EmpiricalSuffixSpace(1, sentences)),
+                             ("suffix_2", EmpiricalSuffixSpace(2, sentences)),
+                             ("suffix_3", EmpiricalSuffixSpace(3, sentences)),
+                             ("suffix_4", EmpiricalSuffixSpace(4, sentences))])
+    parameters.write("spaces")
+    return parameters
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -38,7 +40,7 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--logdir", help="directory to contain logs", default="logs")
     parser.add_argument("-p", "--params", help="pretrained parameter file")
     parser.add_argument("-t", "--tritrain", help="whether or not to use tritraining data", action="store_true")
-    parser.add_argument("-c", "--checkpoint_dir", help="recover checkpoint and evaluate")
+    parser.add_argument("-c", "--checkpoint", help="recover checkpoint, evaluate, and output frozen graph")
 
     args = parser.parse_args()
 
@@ -51,14 +53,13 @@ if __name__ == "__main__":
 
     exp_logdir = os.path.join(args.logdir, args.exp)
 
-    if not os.path.exists(exp_logdir):
-        os.makedirs(exp_logdir)
+    maybe_mkdirs(exp_logdir)
 
     with LoggingToFile(exp_logdir, "init.log"):
         supertag_space = SupertagSpace(maybe_download("data",
                                                       "http://appositive.cs.washington.edu/resources/",
                                                       "categories"))
-        train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits(args.tritrain and args.checkpoint_dir is None)
+        train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits(args.tritrain and args.checkpoint is None)
 
         if args.params is None:
             parameters = get_default_parameters(train_sentences)
@@ -66,24 +67,20 @@ if __name__ == "__main__":
             parameters = get_pretrained_parameters(args.params)
         data = SupertaggerData(supertag_space, parameters.embedding_spaces, train_sentences, tritrain_sentences, dev_sentences)
 
-    if args.checkpoint_dir is not None:
+    if args.checkpoint is not None:
         g = tf.Graph()
         with g.as_default(), tf.Session() as session:
             with tf.variable_scope("model"):
                 model = SupertaggerModel(None, data, is_training=False)
-            saver = tf.train.Saver(tf.trainable_variables())
-            checkpoint = tf.train.get_checkpoint_state(args.checkpoint_dir)
-            if checkpoint and checkpoint.model_checkpoint_path:
-                logging.info("Restoring from: {}".format(checkpoint.model_checkpoint_path))
-                saver.restore(session, checkpoint.model_checkpoint_path)
-            else:
-                raise ValueError("No checkpoint file found.")
+            logging.info("Restoring from: {}".format(args.checkpoint))
+            saver = tf.train.Saver()
+            saver.restore(session, args.checkpoint)
 
             evaluate_supertagger(session, data.dev_data, model)
 
             frozen_version = g.version
             with g.name_scope("frozen"), tf.variable_scope("model", reuse=True):
-                frozen_model = SupertaggerModel(None, data, is_training=False, freeze=True)
+                frozen_model = SupertaggerModel(None, data, is_training=False, freeze=True, max_tokens=72)
             tf.train.write_graph(g.as_graph_def(from_version=frozen_version), "/tmp/taggerflow", "graph.pb", as_text=False)
         sys.exit(0)
 

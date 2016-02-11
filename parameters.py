@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from features import *
+from util import *
 
 class ParameterReader(object):
     def readline(self, line):
@@ -153,6 +154,12 @@ class Parameters:
     def __init__(self, embedding_spaces=[]):
         self.matrices = {}
         self.embedding_spaces = collections.OrderedDict(embedding_spaces)
+
+    def write(self, spaces_dir):
+        maybe_mkdirs(spaces_dir)
+        for name, space in self.embedding_spaces.items():
+            with open(os.path.join(spaces_dir, name + ".txt"), "w") as f:
+                f.write("\n".join(space.space))
 
     def read(self, filename):
         current_reader = None

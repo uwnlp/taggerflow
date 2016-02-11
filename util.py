@@ -4,6 +4,14 @@ import urllib2
 import logging
 import threading
 import datetime
+import errno
+
+def maybe_mkdirs(path):
+    try:
+        os.makedirs(path)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
 
 def maybe_download(data_dir, source_url, filename):
     if not os.path.exists(data_dir):
