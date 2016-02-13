@@ -41,6 +41,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--params", help="pretrained parameter file")
     parser.add_argument("-t", "--tritrain", help="whether or not to use tritraining data", action="store_true")
     parser.add_argument("-c", "--checkpoint", help="recover checkpoint, evaluate, and output frozen graph")
+    parser.add_argument("-j", "--jackknifed", help="all siblings are used as training data instead")
 
     args = parser.parse_args()
 
@@ -59,12 +60,25 @@ if __name__ == "__main__":
         supertag_space = SupertagSpace(maybe_download("data",
                                                       "http://appositive.cs.washington.edu/resources/",
                                                       "categories"))
-        train_sentences, tritrain_sentences, dev_sentences = SupertagReader().get_splits(args.tritrain and args.checkpoint is None)
+
+        reader = SupertagReader()
+        train_sentences, tritrain_sentences, dev_sentences = reader.get_splits(args.tritrain and args.checkpoint is None)
 
         if args.params is None:
             parameters = get_default_parameters(train_sentences)
         else:
             parameters = get_pretrained_parameters(args.params)
+
+        if args.jackknifed is not None:
+            print("Replacing training data with siblings of {}".format(args.jackknifed))
+            jackknifed_dir = os.path.dirname(args.jackknifed)
+            train_sentences = []
+            for filename in os.listdir(jackknifed_dir):
+                filepath = os.path.join(jackknifed_dir, filename)
+                if filename.endswith(".stagged") and filepath != args.jackknifed:
+                    print("Adding {}".format(filepath))
+                    train_sentences.extend(reader.get_sentences(filepath, False))
+
         data = SupertaggerData(supertag_space, parameters.embedding_spaces, train_sentences, tritrain_sentences, dev_sentences)
 
     if args.checkpoint is not None:
