@@ -13,7 +13,7 @@ from util import *
 
 class SupertaggerData(object):
     max_tokens = 102
-    batch_size = 1
+    batch_size = 32
     bucket_size = 5
     max_tritrain_length = 72
 

@@ -70,13 +70,13 @@ if __name__ == "__main__":
             parameters = get_pretrained_parameters(args.params)
 
         if args.jackknifed is not None:
-            print("Replacing training data with siblings of {}".format(args.jackknifed))
+            logging.info("Replacing training data with siblings of {}".format(args.jackknifed))
             jackknifed_dir = os.path.dirname(args.jackknifed)
             train_sentences = []
             for filename in os.listdir(jackknifed_dir):
                 filepath = os.path.join(jackknifed_dir, filename)
                 if filename.endswith(".stagged") and filepath != args.jackknifed:
-                    print("Adding {}".format(filepath))
+                    logging.info("Adding {}".format(filepath))
                     train_sentences.extend(reader.get_sentences(filepath, False))
 
         data = SupertaggerData(supertag_space, parameters.embedding_spaces, train_sentences, tritrain_sentences, dev_sentences)
