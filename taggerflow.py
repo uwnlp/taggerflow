@@ -12,6 +12,8 @@ from config import *
 from util import *
 from parameters import *
 
+from tensorflow.python.client import graph_util
+
 def get_pretrained_parameters(params_file):
     params = Parameters()
     params.read(params_file)
@@ -84,18 +86,18 @@ if __name__ == "__main__":
     if args.checkpoint is not None:
         g = tf.Graph()
         with g.as_default(), tf.Session() as session:
-            with tf.variable_scope("model"):
-                model = SupertaggerModel(None, data, is_training=False)
+            with g.name_scope("frozen"), tf.variable_scope("model"):
+                model = SupertaggerModel(None, data, is_training=False, max_tokens=72)
             logging.info("Restoring from: {}".format(args.checkpoint))
             saver = tf.train.Saver()
             saver.restore(session, args.checkpoint)
-
-            evaluate_supertagger(session, data.dev_data, model)
-
-            frozen_version = g.version
-            with g.name_scope("frozen"), tf.variable_scope("model", reuse=True):
-                frozen_model = SupertaggerModel(None, data, is_training=False, freeze=True, max_tokens=72)
-            tf.train.write_graph(g.as_graph_def(from_version=frozen_version), "/tmp/taggerflow", "graph.pb", as_text=False)
+            tf.train.write_graph(graph_util.convert_variables_to_constants(session,
+                                                                           g.as_graph_def(),
+                                                                           ["frozen/model/prediction/probabilities"]),
+                                 "/tmp/taggerflow",
+                                 "graph.pb",
+                                 as_text=False)
+            logging.info("Computation graph written to /tmp/taggerflow/graph.pb")
         sys.exit(0)
 
     configs = expand_grid(args.grid)

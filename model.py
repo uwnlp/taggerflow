@@ -2,10 +2,6 @@ import collections
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import seq2seq
-
 import logging
 import features
 
@@ -18,7 +14,7 @@ class SupertaggerModel(object):
     num_layers = 1
 
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
-    def __init__(self, config, data, is_training, freeze=False, max_tokens=None):
+    def __init__(self, config, data, is_training, max_tokens=None):
         self.config = config
         self.max_tokens = max_tokens or data.max_tokens
 
@@ -47,7 +43,7 @@ class SupertaggerModel(object):
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"):
             with tf.device("/cpu:0"):
-                embeddings_w = collections.OrderedDict((name, maybe_get_variable(name, [space.size(), space.embedding_size], freeze=freeze)) for name, space in embedding_spaces.items())
+                embeddings_w = collections.OrderedDict((name, tf.get_variable(name, [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
                 embeddings = [tf.nn.embedding_lookup(e,i) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(3, embeddings)
             concat_embedding = tf.squeeze(concat_embedding, [2])
@@ -56,10 +52,10 @@ class SupertaggerModel(object):
 
         with tf.name_scope("lstm"):
             # LSTM cell is replicated across stacks and timesteps.
-            first_cell = DyerLSTMCell(self.lstm_hidden_size, concat_embedding.get_shape()[2].value, freeze=freeze)
+            first_cell = DyerLSTMCell(self.lstm_hidden_size, concat_embedding.get_shape()[2].value)
             if self.num_layers > 1:
-                stacked_cell = DyerLSTMCell(self.lstm_hidden_size, self.lstm_hidden_size, freeze=freeze)
-                cell = rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (self.num_layers - 1))
+                stacked_cell = DyerLSTMCell(self.lstm_hidden_size, self.lstm_hidden_size)
+                cell = tf.nn.rnn_cell.MultiRNNCell([first_cell] + [stacked_cell] * (self.num_layers - 1))
             else:
                 cell = first_cell
 
@@ -75,8 +71,8 @@ class SupertaggerModel(object):
         with tf.name_scope("softmax"):
             # From LSTM outputs to logits.
             flattened = self.flatten(outputs)
-            penultimate = tf.nn.relu(linear(flattened, self.penultimate_hidden_size, "penultimate", freeze=freeze))
-            logits = linear(penultimate, supertags_size, "softmax", freeze=freeze)
+            penultimate = tf.nn.relu(tf.nn.rnn_cell.linear(flattened, self.penultimate_hidden_size, bias=True, scope="penultimate"))
+            logits = tf.nn.rnn_cell.linear(penultimate, supertags_size, bias=True, scope="softmax")
 
         with tf.name_scope("prediction"):
             self.probabilities = self.unflatten(tf.nn.softmax(logits), name="probabilities")
@@ -94,10 +90,10 @@ class SupertaggerModel(object):
                 cross_entropy_list = [tf.reduce_sum(ce * w) for ce, w in zip(cross_entropy_list, modified_weights_list)]
                 self.loss = sum(cross_entropy_list)
                 """
-                self.loss = seq2seq.sequence_loss([logits],
-                                                  [self.flatten(self.y)],
-                                                  [self.flatten(modified_weights)],
-                                                  average_across_timesteps=False, average_across_batch=False)
+                self.loss = tf.nn.seq2seq.sequence_loss([logits],
+                                                        [self.flatten(self.y)],
+                                                        [self.flatten(modified_weights)],
+                                                        average_across_timesteps=False, average_across_batch=False)
 
                 params = tf.trainable_variables()
 
