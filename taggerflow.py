@@ -93,7 +93,7 @@ if __name__ == "__main__":
             saver.restore(session, args.checkpoint)
             tf.train.write_graph(graph_util.convert_variables_to_constants(session,
                                                                            g.as_graph_def(),
-                                                                           ["frozen/model/prediction/probabilities"]),
+                                                                           ["frozen/model/prediction/scores"]),
                                  "/tmp/taggerflow",
                                  "graph.pb",
                                  as_text=False)

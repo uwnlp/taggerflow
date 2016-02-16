@@ -20,11 +20,11 @@ GRACE_PERIOD = 10000
 def evaluate_supertagger(session, data, model):
     x,y,num_tokens,is_tritrain,weights = data
     with Timer("Dev evaluation"):
-        probabilities = session.run(model.probabilities, {
+        scores = session.run(model.scores, {
             model.x: x,
             model.num_tokens: num_tokens
         })
-    predictions = np.argmax(probabilities, 2)
+    predictions = np.argmax(scores, 2)
     num_correct = np.sum(np.equal(predictions, y) * weights)
     num_total = np.sum(weights)
     accuracy = (100.0 * num_correct)/num_total

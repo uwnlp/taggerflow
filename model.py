@@ -75,7 +75,7 @@ class SupertaggerModel(object):
             logits = tf.nn.rnn_cell.linear(penultimate, supertags_size, bias=True, scope="softmax")
 
         with tf.name_scope("prediction"):
-            self.probabilities = self.unflatten(tf.nn.softmax(logits), name="probabilities")
+            self.scores = self.unflatten(logits, name="scores")
 
         if is_training:
             with tf.name_scope("loss"):
