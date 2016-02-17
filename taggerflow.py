@@ -84,11 +84,21 @@ if __name__ == "__main__":
         data = SupertaggerData(supertag_space, parameters.embedding_spaces, train_sentences, tritrain_sentences, dev_sentences)
 
     if args.checkpoint is not None:
+        logging.info("Restoring from: {}".format(args.checkpoint))
+
+        # Evaluate the full size as a sanity check.
+        with tf.Session() as session:
+            with tf.variable_scope("model"):
+                model = SupertaggerModel(None, data, is_training=False)
+            saver = tf.train.Saver()
+            saver.restore(session, args.checkpoint)
+            evaluate_supertagger(session, data.dev_data, model)
+
+        # Write the smaller graph in protobuffer format.
         g = tf.Graph()
         with g.as_default(), tf.Session() as session:
             with g.name_scope("frozen"), tf.variable_scope("model"):
                 model = SupertaggerModel(None, data, is_training=False, max_tokens=72)
-            logging.info("Restoring from: {}".format(args.checkpoint))
             saver = tf.train.Saver()
             saver.restore(session, args.checkpoint)
             tf.train.write_graph(graph_util.convert_variables_to_constants(session,
