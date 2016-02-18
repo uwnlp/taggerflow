@@ -4,7 +4,7 @@ import sys
 import os
 import argparse
 import logging
-
+import tempfile
 from train import *
 from model import *
 from data import *
@@ -19,7 +19,7 @@ def get_pretrained_parameters(params_file):
     params.read(params_file)
     return params
 
-def get_default_parameters(sentences):
+def get_default_parameters(sentences, spaces_dir):
     parameters = Parameters([("words",    TurianEmbeddingSpace(maybe_download("data",
                                                                               "http://appositive.cs.washington.edu/resources/",
                                                                               "embeddings.raw"))),
@@ -31,7 +31,7 @@ def get_default_parameters(sentences):
                              ("suffix_2", EmpiricalSuffixSpace(2, sentences)),
                              ("suffix_3", EmpiricalSuffixSpace(3, sentences)),
                              ("suffix_4", EmpiricalSuffixSpace(4, sentences))])
-    parameters.write("/tmp/taggerflow")
+    parameters.write(spaces_dir)
     return parameters
 
 if __name__ == "__main__":
@@ -58,6 +58,8 @@ if __name__ == "__main__":
 
     maybe_mkdirs(exp_logdir)
 
+    output_dir = tempfile.mkdtemp(prefix="taggerflow-")
+
     with LoggingToFile(exp_logdir, "init.log"):
         supertag_space = SupertagSpace(maybe_download("data",
                                                       "http://appositive.cs.washington.edu/resources/",
@@ -67,7 +69,7 @@ if __name__ == "__main__":
         train_sentences, tritrain_sentences, dev_sentences = reader.get_splits(args.tritrain and args.checkpoint is None)
 
         if args.params is None:
-            parameters = get_default_parameters(train_sentences)
+            parameters = get_default_parameters(train_sentences, output_dir)
         else:
             parameters = get_pretrained_parameters(args.params)
 
@@ -104,10 +106,10 @@ if __name__ == "__main__":
             tf.train.write_graph(graph_util.convert_variables_to_constants(session,
                                                                            g.as_graph_def(),
                                                                            ["frozen/model/prediction/scores"]),
-                                 "/tmp/taggerflow",
+                                 output_dir,
                                  "graph.pb",
                                  as_text=False)
-            logging.info("Computation graph written to /tmp/taggerflow/graph.pb")
+            logging.info("Computation graph written to {}/graph.pb".format(output_dir))
         sys.exit(0)
 
     configs = expand_grid(args.grid)
