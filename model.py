@@ -11,7 +11,7 @@ from custom_rnn import *
 class SupertaggerModel(object):
     lstm_hidden_size = 128
     penultimate_hidden_size = 64
-    num_layers = 1
+    num_layers = 2
 
     # If variables in the computation graph are frozen, the protobuffer can be used out of the box.
     def __init__(self, config, data, is_training, max_tokens=None):

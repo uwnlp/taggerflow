@@ -189,7 +189,6 @@ class Parameters:
 
     def assign_pretrained(self, session):
         unassigned_variables = set(v.name for v in tf.trainable_variables())
-
         for name, space in self.embedding_spaces.items():
             if hasattr(space, "embeddings"):
                 variable = tf.get_variable(name, [space.size(), space.embedding_size])

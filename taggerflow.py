@@ -88,29 +88,34 @@ if __name__ == "__main__":
     if args.checkpoint is not None:
         logging.info("Restoring from: {}".format(args.checkpoint))
 
-        # Evaluate the full size as a sanity check.
-        with tf.Session() as session:
-            with tf.variable_scope("model"):
-                model = SupertaggerModel(None, data, is_training=False)
+    # Evaluate the full size as a sanity check.
+    with tf.Session() as session:
+        with tf.variable_scope("model"):
+            model = SupertaggerModel(None, data, is_training=False)
+        with tf.variable_scope("model", reuse=True):
+            parameters.assign_pretrained(session)
+        if args.checkpoint is not None:
             saver = tf.train.Saver()
             saver.restore(session, args.checkpoint)
-            evaluate_supertagger(session, data.dev_data, model)
+        evaluate_supertagger(session, data.dev_data, model)
 
-        # Write the smaller graph in protobuffer format.
-        g = tf.Graph()
-        with g.as_default(), tf.Session() as session:
-            with g.name_scope("frozen"), tf.variable_scope("model"):
-                model = SupertaggerModel(None, data, is_training=False, max_tokens=72)
+    # Write the smaller graph in protobuffer format.
+    g = tf.Graph()
+    with g.as_default(), tf.Session() as session:
+        with g.name_scope("frozen"), tf.variable_scope("model"):
+            model = SupertaggerModel(None, data, is_training=False, max_tokens=72)
+        with g.name_scope("frozen"), tf.variable_scope("model", reuse=True):
+            parameters.assign_pretrained(session)
+        if args.checkpoint is not None:
             saver = tf.train.Saver()
             saver.restore(session, args.checkpoint)
-            tf.train.write_graph(graph_util.convert_variables_to_constants(session,
-                                                                           g.as_graph_def(),
-                                                                           ["frozen/model/prediction/scores"]),
-                                 output_dir,
-                                 "graph.pb",
-                                 as_text=False)
-            logging.info("Computation graph written to {}/graph.pb".format(output_dir))
-        sys.exit(0)
+        tf.train.write_graph(graph_util.convert_variables_to_constants(session,
+                                                                       g.as_graph_def(),
+                                                                       ["frozen/model/prediction/scores"]),
+                             output_dir,
+                             "graph.pb",
+                             as_text=False)
+        logging.info("Computation graph written to {}/graph.pb".format(output_dir))
 
     configs = expand_grid(args.grid)
     for config in configs:
