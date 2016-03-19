@@ -107,7 +107,33 @@ class Parameters:
         "PARAMETERS" : MatrixReader
     }
 
-    variable_mapping = {
+    one_layer_variable_mapping = {
+        # Forward LSTM.
+        "BiRNN_FW/RNN/DyerLSTMCell/input_gate/Matrix" : ["forward_lstm_layer_1_parameters_0", "forward_lstm_layer_1_parameters_1", "forward_lstm_layer_1_parameters_2"],
+        "BiRNN_FW/RNN/DyerLSTMCell/input_gate/Bias" : ["forward_lstm_layer_1_parameters_3"],
+        "BiRNN_FW/RNN/DyerLSTMCell/new_input/Matrix" : ["forward_lstm_layer_1_parameters_8", "forward_lstm_layer_1_parameters_9"],
+        "BiRNN_FW/RNN/DyerLSTMCell/new_input/Bias" : ["forward_lstm_layer_1_parameters_10"],
+        "BiRNN_FW/RNN/DyerLSTMCell/output_gate/Matrix" : ["forward_lstm_layer_1_parameters_4", "forward_lstm_layer_1_parameters_5", "forward_lstm_layer_1_parameters_6"],
+        "BiRNN_FW/RNN/DyerLSTMCell/output_gate/Bias" : ["forward_lstm_layer_1_parameters_7"],
+
+        # Backward LSTM.
+        "BiRNN_BW/RNN/DyerLSTMCell/input_gate/Matrix" : ["backward_lstm_layer_1_parameters_0", "backward_lstm_layer_1_parameters_1", "backward_lstm_layer_1_parameters_2"],
+        "BiRNN_BW/RNN/DyerLSTMCell/input_gate/Bias" : ["backward_lstm_layer_1_parameters_3"],
+        "BiRNN_BW/RNN/DyerLSTMCell/new_input/Matrix" : ["backward_lstm_layer_1_parameters_8", "backward_lstm_layer_1_parameters_9"],
+        "BiRNN_BW/RNN/DyerLSTMCell/new_input/Bias" : ["backward_lstm_layer_1_parameters_10"],
+        "BiRNN_BW/RNN/DyerLSTMCell/output_gate/Matrix" : ["backward_lstm_layer_1_parameters_4", "backward_lstm_layer_1_parameters_5", "backward_lstm_layer_1_parameters_6"],
+        "BiRNN_BW/RNN/DyerLSTMCell/output_gate/Bias" : ["backward_lstm_layer_1_parameters_7"],
+
+        # Penultimate layer.
+        "penultimate/Matrix" : ["forward_lstm_to_penultimate", "backward_lstm_to_penultimate"],
+        "penultimate/Bias" : ["penultimate_bias"],
+
+        # Softmax layer.
+        "softmax/Matrix" : ["penultimate_to_softmax"],
+        "softmax/Bias" : ["softmax_bias"]
+    }
+
+    two_layer_variable_mapping = {
         # First layer of the forward LSTM.
         "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/input_gate/Matrix" : ["forward_lstm_layer_1_parameters_0", "forward_lstm_layer_1_parameters_1", "forward_lstm_layer_1_parameters_2"],
         "BiRNN_FW/RNN/MultiRNNCell/Cell0/DyerLSTMCell/input_gate/Bias" : ["forward_lstm_layer_1_parameters_3"],
@@ -198,10 +224,14 @@ class Parameters:
 
         # TODO: do this the right way...
         if len(self.matrices) != 0:
-            for name, matrix_names in self.variable_mapping.items():
+            for name, matrix_names in self.two_layer_variable_mapping.items():
+            #for name, matrix_names in self.one_layer_variable_mapping.items():
+                if not all((n in self.matrices) for n in matrix_names):
+                    logging.info("Skipping parameters for {}".format(name))
+                    continue
                 concat = np.concatenate([self.matrices[n] for n in matrix_names])
                 variable = tf.get_variable(name, concat.shape)
-                logging.info("Assigning pretrained matrix for {}.".format(variable.name))
+                logging.info("Assigning pretrained matrix for {} ({}).".format(variable.name, variable.get_shape()))
                 unassigned_variables.remove(variable.name)
                 session.run(tf.assign(variable, concat))
 

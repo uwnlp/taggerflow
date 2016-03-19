@@ -19,7 +19,7 @@ def get_pretrained_parameters(params_file):
     params.read(params_file)
     return params
 
-def get_default_parameters(sentences, spaces_dir):
+def get_default_parameters(sentences):
     parameters = Parameters([("words",    TurianEmbeddingSpace(maybe_download("data",
                                                                               "http://appositive.cs.washington.edu/resources/",
                                                                               "embeddings.raw"))),
@@ -31,7 +31,6 @@ def get_default_parameters(sentences, spaces_dir):
                              ("suffix_2", EmpiricalSuffixSpace(2, sentences)),
                              ("suffix_3", EmpiricalSuffixSpace(3, sentences)),
                              ("suffix_4", EmpiricalSuffixSpace(4, sentences))])
-    parameters.write(spaces_dir)
     return parameters
 
 if __name__ == "__main__":
@@ -69,10 +68,10 @@ if __name__ == "__main__":
         train_sentences, tritrain_sentences, dev_sentences = reader.get_splits(args.tritrain and args.checkpoint is None)
 
         if args.params is None:
-            parameters = get_default_parameters(train_sentences, output_dir)
+            parameters = get_default_parameters(train_sentences)
         else:
             parameters = get_pretrained_parameters(args.params)
-
+        parameters.write(output_dir)
         if args.jackknifed is not None:
             logging.info("Replacing training data with siblings of {}".format(args.jackknifed))
             jackknifed_dir = os.path.dirname(args.jackknifed)

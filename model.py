@@ -59,14 +59,22 @@ class SupertaggerModel(object):
             else:
                 cell = first_cell
 
-            # Split into LSTM inputs.
-            inputs = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, concat_embedding)]
+            if is_training:
+                # Split into LSTM inputs.
+                inputs = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, concat_embedding)]
 
-            # Construct LSTM.
-            outputs = bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
+                # Construct LSTM.
+                outputs = bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
 
-            # Rejoin LSTM outputs.
-            outputs = tf.concat(1, [tf.expand_dims(output, 1) for output in outputs])
+                # Rejoin LSTM outputs.
+                outputs = tf.concat(1, [tf.expand_dims(output, 1) for output in outputs])
+            else:
+                with tf.variable_scope("BiRNN_FW"):
+                    forward_outputs, _ = tf.nn.dynamic_rnn(cell, concat_embedding, sequence_length=self.num_tokens, dtype=tf.float32)
+                with tf.variable_scope("BiRNN_BW"):
+                    backward_outputs, _ = tf.nn.dynamic_rnn(cell, tf.reverse_sequence(concat_embedding, self.num_tokens, 1, 0), sequence_length=self.num_tokens, dtype=tf.float32)
+                backward_outputs = tf.reverse_sequence(backward_outputs, self.num_tokens, 1, 0)
+                outputs = tf.concat(2, [forward_outputs, backward_outputs])
 
         with tf.name_scope("softmax"):
             # From LSTM outputs to logits.
