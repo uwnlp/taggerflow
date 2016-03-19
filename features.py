@@ -97,7 +97,7 @@ class SuffixSpace(EmbeddingSpace):
 class EmpiricalEmbeddingSpace(EmbeddingSpace):
     def __init__(self, sentences, min_count):
         counts = collections.Counter()
-        for tokens,supertags,weights in sentences:
+        for tokens,supertags,weights in sentences():
             counts.update((self.extract(t) for t in tokens))
 
         self.space = [f for f in counts if counts[f] >= min_count]
