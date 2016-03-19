@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import logging
+import threading
 
 import tensorflow as tf
 import custom_init_ops
@@ -28,7 +29,8 @@ class SupertaggerTrainer(object):
             with tf.variable_scope("model", reuse=True):
                 params.assign_pretrained(session)
 
-            data.populate_train_queue(session, train_model)
+            population_thread = threading.Thread(target=data.populate_train_queue, args=(session, train_model))
+            population_thread.start()
 
             evaluator = SupertaggerEvaluator(session, data.dev_data, dev_model, train_model.global_step, self.writer, self.logdir)
 
@@ -40,10 +42,8 @@ class SupertaggerTrainer(object):
             while evaluator.maybe_evaluate():
                 i += 1
 
-                # Keep sampling batches with replacement.
-                _, loss, _ = session.run([train_model.optimize,
-                                          train_model.loss,
-                                          train_model.requeue])
+                _, loss = session.run([train_model.optimize,
+                                       train_model.loss])
                 train_loss += loss
                 if i % 100 == 0:
                     timer.tick("{} training steps".format(i))

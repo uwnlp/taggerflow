@@ -30,17 +30,9 @@ class SupertaggerData(object):
         logging.info("Dev sentences: {}".format(len(dev_sentences)))
 
         if len(tritrain_sentences) > 0:
-            train_distribution = self.get_sentence_length_distribution(train_sentences)
-            tritrain_distribution = self.get_sentence_length_distribution(tritrain_sentences)
-
-            logging.info("Train distribution: {}".format(self.format_distribution(train_distribution)))
-            logging.info("Tri-train distribution: {}".format(self.format_distribution(tritrain_distribution)))
-
-            self.distribution_ratios = [t/tt if tt > 0.0 else 0.0 for t,tt in zip(train_distribution, tritrain_distribution)]
-            self.tritrain_ratio = float(len(train_sentences))/len(tritrain_sentences)
-
-            logging.info("Distribution ratios: {}".format(self.format_distribution(self.distribution_ratios)))
-            logging.info("Tri-train to train ratio: {:.5f}".format(self.tritrain_ratio))
+            self.tritrain_ratio = 15
+        else:
+            self.tritrain_ratio = 1
 
         logging.info("Massaging data into input format...")
         self.train_sentences = train_sentences
@@ -76,10 +68,7 @@ class SupertaggerData(object):
         y = np.array([self.supertag_space.index(s) for s in supertags])
 
         # Labels with negative indices should have 0 weight.
-        weights = (y >= 0)
-        if is_tritrain:
-            # Tri-training data is weighted so that the sentence length distribution matches the training data.
-            weights *= self.distribution_ratios[self.get_bucket(len(tokens))] * self.tritrain_ratio
+        weights = (y >= 0).astype(float)
 
         x.resize([self.max_tokens, x.shape[1]])
         y.resize([self.max_tokens])
@@ -88,13 +77,14 @@ class SupertaggerData(object):
 
     def populate_train_queue(self, session, model):
         i = 0
-        for s in itertools.chain(self.train_sentences, self.tritrain_sentences):
-            tensors = self.tensorize(s)
-            if tensors is not None:
-                session.run(model.input_enqueue, { i:t for i,t in zip(model.inputs, tensors) })
-                i += 1
-                if i % 10000 == 0:
-                    logging.info("Queued {} sentences.".format(i))
+        while True:
+            for s in itertools.chain(itertools.chain.from_iterable(itertools.repeat(self.train_sentences, self.tritrain_ratio)), self.tritrain_sentences):
+                tensors = self.tensorize(s)
+                if tensors is not None:
+                    session.run(model.input_enqueue, { i:t for i,t in zip(model.inputs, tensors) })
+                    i += 1
+                    if i % 10000 == 0:
+                        logging.info("Queued {} sentences.".format(i))
 
     def get_data(self, sentences):
         tensors = (self.tensorize(s) for s in sentences)

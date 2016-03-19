@@ -30,11 +30,10 @@ class SupertaggerModel(object):
                 tritrain_prop = (tf.float32, [])
                 weights_prop = (tf.float32, [self.max_tokens])
                 dtypes, shapes = zip(x_prop, y_prop, num_tokens_prop, tritrain_prop, weights_prop)
-                input_queue = tf.RandomShuffleQueue(len(data.train_sentences) + len(data.tritrain_sentences), 0, dtypes, shapes=shapes)
+                input_queue = tf.RandomShuffleQueue(len(data.train_sentences), 0, dtypes, shapes=shapes)
                 self.inputs = [tf.placeholder(dtype, shape) for dtype, shape in zip(dtypes, shapes)]
                 self.input_enqueue = input_queue.enqueue(self.inputs)
                 self.x, self.y, self.num_tokens, self.tritrain, self.weights = input_queue.dequeue_many(data.batch_size)
-                self.requeue = input_queue.enqueue_many([self.x, self.y, self.num_tokens, self.tritrain, self.weights])
             else:
                 # Each training step is batched with a maximum length.
                 self.x = tf.placeholder(tf.int32, [None, self.max_tokens, len(embedding_spaces)], name="x")
