@@ -6,6 +6,7 @@ import logging
 import itertools
 
 import numpy as np
+import random
 
 from features import *
 from ccgbank import *
@@ -77,14 +78,18 @@ class SupertaggerData(object):
 
     def populate_train_queue(self, session, model):
         i = 0
+        tritrain_probability = 43/float(43 + 15)
         while True:
-            for s in itertools.chain(itertools.chain.from_iterable(itertools.repeat(self.train_sentences, self.tritrain_ratio)), self.tritrain_sentences):
-                tensors = self.tensorize(s)
-                if tensors is not None:
-                    session.run(model.input_enqueue, { i:t for i,t in zip(model.inputs, tensors) })
-                    i += 1
-                    if i % 10000 == 0:
-                        logging.info("Queued {} sentences.".format(i))
+            if np.random.rand() > tritrain_probability:
+                s = random.choice(self.train_sentences)
+            else:
+                s = random.choice(self.tritrain_sentences)
+            tensors = self.tensorize(s)
+            if tensors is not None:
+                session.run(model.input_enqueue, { i:t for i,t in zip(model.inputs, tensors) })
+                i += 1
+                if i % 10000 == 0:
+                    logging.info("Queued {} sentences.".format(i))
 
     def get_data(self, sentences):
         tensors = (self.tensorize(s) for s in sentences)
