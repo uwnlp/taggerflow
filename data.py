@@ -78,7 +78,7 @@ class SupertaggerData(object):
 
     def populate_train_queue(self, session, model):
         i = 0
-        tritrain_probability = 43/float(43 + 15)
+        tritrain_probability = len(self.tritrain_sentences)/float(len(self.tritrain_sentences) + 15)
         while True:
             if np.random.rand() > tritrain_probability:
                 s = random.choice(self.train_sentences)

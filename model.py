@@ -41,8 +41,9 @@ class SupertaggerModel(object):
 
         # From feature indexes to concatenated embeddings.
         with tf.name_scope("embeddings"):
-            embeddings_w = collections.OrderedDict((name, tf.get_variable(name, [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
-            embeddings = [tf.gather(e,i) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
+            with tf.device("/cpu:0"):
+                embeddings_w = collections.OrderedDict((name, tf.get_variable(name, [space.size(), space.embedding_size])) for name, space in embedding_spaces.items())
+                embeddings = [tf.gather(e,i) for e,i in zip(embeddings_w.values(), tf.split(2, len(embedding_spaces), self.x))]
             concat_embedding = tf.concat(3, embeddings)
             concat_embedding = tf.squeeze(concat_embedding, [2])
             if is_training:
