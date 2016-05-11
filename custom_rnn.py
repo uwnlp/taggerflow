@@ -14,7 +14,7 @@ def rnn(cell, inputs, initial_state=None, dtype=None,
         raise ValueError("If no initial_state is provided, dtype must be.")
       state = cell.zero_state(batch_size, dtype)
 
-    if sequence_length:  # Prepare variables
+    if sequence_length is not None:  # Prepare variables
       zero_output_state = (
           tf.zeros(tf.pack([batch_size, cell.output_size]),
                    inputs[0].dtype),
@@ -27,7 +27,7 @@ def rnn(cell, inputs, initial_state=None, dtype=None,
       if time > 0: tf.get_variable_scope().reuse_variables()
       def output_state():
         return cell(input_, state)
-      if sequence_length:
+      if sequence_length is not None:
         (output, state) = control_flow_ops.cond(
             time >= max_sequence_length,
             lambda: zero_output_state, output_state)
