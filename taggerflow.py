@@ -12,7 +12,7 @@ from config import *
 from util import *
 from parameters import *
 
-from tensorflow.python.client import graph_util
+from tensorflow.python.framework import graph_util
 
 def get_pretrained_parameters(params_file):
     params = Parameters()

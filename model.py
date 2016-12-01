@@ -6,7 +6,6 @@ import logging
 import features
 
 from custom_rnn_cell import *
-from custom_rnn import *
 
 class SupertaggerModel(object):
     lstm_hidden_size = 128
@@ -58,28 +57,13 @@ class SupertaggerModel(object):
             else:
                 cell = first_cell
 
-            if is_training:
-                # Split into LSTM inputs.
-                inputs = [tf.squeeze(split, [1]) for split in tf.split(1, self.max_tokens, concat_embedding)]
-
-                # Construct LSTM.
-                outputs = bidirectional_rnn(cell, cell, inputs, dtype=tf.float32, sequence_length=self.num_tokens)
-
-                # Rejoin LSTM outputs.
-                outputs = tf.concat(1, [tf.expand_dims(output, 1) for output in outputs])
-            else:
-                with tf.variable_scope("BiRNN_FW"):
-                    forward_outputs, _ = tf.nn.dynamic_rnn(cell, concat_embedding, sequence_length=self.num_tokens, dtype=tf.float32)
-                with tf.variable_scope("BiRNN_BW"):
-                    backward_outputs, _ = tf.nn.dynamic_rnn(cell, tf.reverse_sequence(concat_embedding, self.num_tokens, 1, 0), sequence_length=self.num_tokens, dtype=tf.float32)
-                backward_outputs = tf.reverse_sequence(backward_outputs, self.num_tokens, 1, 0)
-                outputs = tf.concat(2, [forward_outputs, backward_outputs])
-
+            outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell, cell, concat_embedding, sequence_length=self.num_tokens, dtype=tf.float32)
+            outputs = tf.concat(2, outputs)
         with tf.name_scope("softmax"):
             # From LSTM outputs to logits.
             flattened = self.flatten(outputs)
-            penultimate = tf.nn.relu(tf.nn.rnn_cell.linear(flattened, self.penultimate_hidden_size, bias=True, scope="penultimate"))
-            logits = tf.nn.rnn_cell.linear(penultimate, supertags_size, bias=True, scope="softmax")
+            penultimate = tf.nn.relu(tf.nn.rnn_cell._linear(flattened, self.penultimate_hidden_size, bias=True, scope="penultimate"))
+            logits = tf.nn.rnn_cell._linear(penultimate, supertags_size, bias=True, scope="softmax")
 
         with tf.name_scope("prediction"):
             self.scores = self.unflatten(logits, name="scores")

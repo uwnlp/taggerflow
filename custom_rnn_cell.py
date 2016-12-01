@@ -27,9 +27,9 @@ class DyerLSTMCell(tf.nn.rnn_cell.RNNCell):
     with tf.variable_scope(scope or type(self).__name__):  # "DyerLSTMCell"
       h, c = tf.split(1, 2, state)
 
-      input_gate = tf.sigmoid(tf.nn.rnn_cell.linear([inputs, h, c], self._num_units, bias=True, bias_start=0.25, scope="input_gate"))
-      new_input = tf.tanh(tf.nn.rnn_cell.linear([inputs, h], self._num_units, bias=True, scope="new_input"))
+      input_gate = tf.sigmoid(tf.nn.rnn_cell._linear([inputs, h, c], self._num_units, bias=True, bias_start=0.25, scope="input_gate"))
+      new_input = tf.tanh(tf.nn.rnn_cell._linear([inputs, h], self._num_units, bias=True, scope="new_input"))
       new_c = input_gate * new_input + (1.0 - input_gate) * c
-      output_gate = tf.sigmoid(tf.nn.rnn_cell.linear([inputs, h, new_c], self._num_units, bias=True, scope="output_gate"))
+      output_gate = tf.sigmoid(tf.nn.rnn_cell._linear([inputs, h, new_c], self._num_units, bias=True, scope="output_gate"))
       new_h = tf.tanh(new_c) * output_gate
     return new_h, tf.concat(1, [new_h, new_c])
